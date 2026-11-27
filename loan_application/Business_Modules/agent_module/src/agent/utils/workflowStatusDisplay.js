@@ -1,0 +1,70 @@
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus'
+
+export const WORKFLOW_STATUS_CODES = Object.freeze({
+  NEW_APPLICATION: 'NEW_APPLICATION',
+  RM_VERIFICATION_PENDING: 'RM_VERIFICATION_PENDING',
+  RM_VERIFICATION_IN_PROGRESS: 'RM_VERIFICATION_IN_PROGRESS',
+  BO_VERIFICATION_PENDING: 'BO_VERIFICATION_PENDING',
+  BO_VERIFICATION_IN_PROGRESS: 'BO_VERIFICATION_IN_PROGRESS',
+  CM_APPROVAL_PENDING: 'CM_APPROVAL_PENDING',
+  CM_REVIEW_IN_PROGRESS: 'CM_REVIEW_IN_PROGRESS',
+  CH_APPROVAL_PENDING: 'CH_APPROVAL_PENDING',
+  CH_REVIEW_IN_PROGRESS: 'CH_REVIEW_IN_PROGRESS',
+  CREDIT_APPROVED_MAKER_PENDING: 'CREDIT_APPROVED_MAKER_PENDING',
+  MAKER_VERIFICATION_IN_PROGRESS: 'MAKER_VERIFICATION_IN_PROGRESS',
+  RETURNED_TO_RM_CORRECTION_PENDING: 'RETURNED_TO_RM_CORRECTION_PENDING',
+  RETURNED_TO_BO_CORRECTION_PENDING: 'RETURNED_TO_BO_CORRECTION_PENDING',
+  APPLICATION_REJECTED: 'APPLICATION_REJECTED',
+})
+
+export const WORKFLOW_STATUS_FILTERS = Object.freeze([
+  { value: 'ALL', label: 'All Status', codes: [] },
+  { value: WORKFLOW_STATUS_CODES.NEW_APPLICATION, label: 'New Application', codes: [WORKFLOW_STATUS_CODES.NEW_APPLICATION] },
+  { value: WORKFLOW_STATUS_CODES.RM_VERIFICATION_PENDING, label: 'RM Verification Pending', codes: [WORKFLOW_STATUS_CODES.RM_VERIFICATION_PENDING] },
+  { value: WORKFLOW_STATUS_CODES.RM_VERIFICATION_IN_PROGRESS, label: 'RM Verification In Progress', codes: [WORKFLOW_STATUS_CODES.RM_VERIFICATION_IN_PROGRESS] },
+  { value: 'BO_VERIFICATION', label: 'Back Office Verification', codes: [WORKFLOW_STATUS_CODES.BO_VERIFICATION_PENDING, WORKFLOW_STATUS_CODES.BO_VERIFICATION_IN_PROGRESS] },
+  { value: 'CREDIT_REVIEW', label: 'Credit Review', codes: [WORKFLOW_STATUS_CODES.CM_APPROVAL_PENDING, WORKFLOW_STATUS_CODES.CM_REVIEW_IN_PROGRESS, WORKFLOW_STATUS_CODES.CH_APPROVAL_PENDING, WORKFLOW_STATUS_CODES.CH_REVIEW_IN_PROGRESS] },
+  { value: 'MAKER_VERIFICATION', label: 'Maker Verification', codes: [WORKFLOW_STATUS_CODES.CREDIT_APPROVED_MAKER_PENDING, WORKFLOW_STATUS_CODES.MAKER_VERIFICATION_IN_PROGRESS] },
+  { value: 'RETURNED', label: 'Returned for Correction', codes: [WORKFLOW_STATUS_CODES.RETURNED_TO_RM_CORRECTION_PENDING, WORKFLOW_STATUS_CODES.RETURNED_TO_BO_CORRECTION_PENDING] },
+  { value: WORKFLOW_STATUS_CODES.APPLICATION_REJECTED, label: 'Application Rejected', codes: [WORKFLOW_STATUS_CODES.APPLICATION_REJECTED] },
+])
+
+const BADGE_TYPE_BY_CODE = Object.freeze({
+  [WORKFLOW_STATUS_CODES.NEW_APPLICATION]: 'submitted',
+  [WORKFLOW_STATUS_CODES.RM_VERIFICATION_PENDING]: 'pending-rm',
+  [WORKFLOW_STATUS_CODES.RM_VERIFICATION_IN_PROGRESS]: 'under-review',
+  [WORKFLOW_STATUS_CODES.BO_VERIFICATION_PENDING]: 'pending-rm',
+  [WORKFLOW_STATUS_CODES.BO_VERIFICATION_IN_PROGRESS]: 'under-review',
+  [WORKFLOW_STATUS_CODES.CM_APPROVAL_PENDING]: 'pending-rm',
+  [WORKFLOW_STATUS_CODES.CM_REVIEW_IN_PROGRESS]: 'under-review',
+  [WORKFLOW_STATUS_CODES.CH_APPROVAL_PENDING]: 'pending-rm',
+  [WORKFLOW_STATUS_CODES.CH_REVIEW_IN_PROGRESS]: 'under-review',
+  [WORKFLOW_STATUS_CODES.CREDIT_APPROVED_MAKER_PENDING]: 'approved-rm',
+  [WORKFLOW_STATUS_CODES.MAKER_VERIFICATION_IN_PROGRESS]: 'under-review',
+  [WORKFLOW_STATUS_CODES.RETURNED_TO_RM_CORRECTION_PENDING]: 'returned-rm',
+  [WORKFLOW_STATUS_CODES.RETURNED_TO_BO_CORRECTION_PENDING]: 'returned-rm',
+  [WORKFLOW_STATUS_CODES.APPLICATION_REJECTED]: 'returned-rm',
+})
+
+export function getWorkflowStatusPresentation(statusOrRecord) {
+  const normalized = statusOrRecord && Object.prototype.hasOwnProperty.call(statusOrRecord, 'hasDetailedWorkflowStatus')
+    ? statusOrRecord
+    : extractWorkflowStatus(statusOrRecord)
+
+  return {
+    ...normalized,
+    displayName: normalized.workflowStatusName || 'Status unavailable',
+    badgeType: BADGE_TYPE_BY_CODE[normalized.workflowStatusCode] || 'default',
+  }
+}
+
+export function matchesWorkflowStatusFilter(status, filterValue) {
+  if (!filterValue || filterValue === 'ALL') return true
+  const filter = WORKFLOW_STATUS_FILTERS.find((option) => option.value === filterValue)
+  return Boolean(filter?.codes.includes(status?.workflowStatusCode))
+}
+
+export function isNewApplication(status) {
+  return status?.workflowStatusCode === WORKFLOW_STATUS_CODES.NEW_APPLICATION ||
+    (status?.workflowStatusCode == null && status?.legacyStatus === 0)
+}

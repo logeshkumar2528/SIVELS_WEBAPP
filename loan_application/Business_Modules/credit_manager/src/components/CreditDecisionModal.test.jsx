@@ -11,7 +11,10 @@ vi.mock('../api/creditManagerService', () => ({
     getApprovingAuthorities: vi.fn(),
   },
 }));
-vi.mock('../auth/authStorage', () => ({ getCreditManagerId: () => 21 }));
+vi.mock('../auth/authStorage', () => ({
+  getCreditManagerId: () => 21,
+  getCreditManagerAuth: () => ({ creditManagerId: 21, role: 'CreditManager' }),
+}));
 
 const { default: creditManagerService } = await import('../api/creditManagerService');
 const { default: CreditDecisionModal, DECISION_ACTIONS } = await import('./CreditDecisionModal');
@@ -40,11 +43,13 @@ describe('CreditDecisionModal', () => {
       <CreditDecisionModal
         action={DECISION_ACTIONS.APPROVE}
         sanctionTerms={{ loading: false, amount: 2500000, roi: 9.5, tenure: 240 }}
+        approvalCheck={{ loading: false, amount: 2500000, outcome: 'WithinLimit', maximumApprovalAmount: 2500000 }}
         onClose={vi.fn()}
         onSubmitted={onSubmitted}
       />
     );
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.getByText('Proposed Loan Amount (₹)')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Approve Application' }));
     await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
     expect(onSubmitted.mock.calls[0][1]).toEqual({
@@ -128,6 +133,7 @@ describe('CreditDecisionModal', () => {
       <CreditDecisionModal
         action={DECISION_ACTIONS.APPROVE}
         sanctionTerms={{ loading: false, amount: 900000, roi: 12, tenure: 36 }}
+        approvalCheck={{ loading: false, amount: 900000, outcome: 'WithinLimit', maximumApprovalAmount: 900000 }}
         onClose={vi.fn()}
         onSubmitted={vi.fn().mockRejectedValue(error)}
       />

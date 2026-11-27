@@ -27,30 +27,14 @@ import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHan
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { useAuth } from '../../../../../../Core/src/context/AuthContext'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
-import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
+import { extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus'
+import {
+  WORKFLOW_STATUS_FILTERS,
+  getWorkflowStatusPresentation,
+  isNewApplication,
+  matchesWorkflowStatusFilter,
+} from '../../utils/workflowStatusDisplay'
 import './SubmissionHistory.css'
-
-const STATUS_OPTIONS = [
-  { value: 'All Status', label: 'All Status' },
-  { value: 'New', label: 'New' },
-  { value: 'Pending', label: 'RM Pending' },
-  { value: 'Under Review', label: 'CM Pending' },
-  { value: 'Returned', label: 'BO Returned' },
-  { value: 'Logged to HO', label: 'Logged to HO' },
-  { value: 'Approved', label: 'Approved' },
-  { value: 'Rejected', label: 'Rejected' },
-]
-
-const getStatusType = (status) => {
-  const s = String(status ?? '').toLowerCase()
-  if (s.includes('pending')) return 'pending-rm'
-  if (s.includes('review')) return 'under-review'
-  if (s.includes('return') || s.includes('reject')) return 'returned-rm'
-  if (s.includes('approve') || s.includes('success') || s.includes('logged to ho')) return 'approved-rm'
-  if (s.includes('submit')) return 'submitted'
-  if (s.includes('draft') || s.includes('new')) return 'new-rm'
-  return 'default'
-}
 
 function SubmissionHistory() {
   const navigate = useNavigate()
@@ -72,14 +56,14 @@ function SubmissionHistory() {
 
   // Filter States (Draft vs Applied)
   const [draftSearch, setDraftSearch] = useState('')
-  const [draftStatus, setDraftStatus] = useState('All Status')
+  const [draftStatus, setDraftStatus] = useState('ALL')
   const [draftFromDate, setDraftFromDate] = useState('')
   const [draftToDate, setDraftToDate] = useState('')
   const [dateRangeError, setDateRangeError] = useState('')
 
   const [appliedFilters, setAppliedFilters] = useState({
     search: '',
-    status: 'All Status',
+    status: 'ALL',
     fromDate: '',
     toDate: '',
   })
@@ -162,13 +146,10 @@ function SubmissionHistory() {
       // Sort DESC by CreatedAt
       myCustomers.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       
-      setSubmissions(myCustomers.map((customer) => ({
-        ...customer,
-        status: normalizeApplicationStatus(
-          customer.status ?? customer.Status,
-          customer.statusName ?? customer.StatusName
-        ),
-      })))
+        setSubmissions(myCustomers.map((customer) => ({
+          ...customer,
+          workflowStatus: extractWorkflowStatus(customer),
+        })))
     } catch (err) {
       console.error("Failed to load submissions", err)
       setError("Unable to load submission history")
@@ -210,9 +191,7 @@ function SubmissionHistory() {
         if (!matchesSearch) return false
       }
 
-      const matchesStatus =
-        appliedFilters.status === 'All Status' ||
-        getStatusType(item.status) === getStatusType(appliedFilters.status)
+      const matchesStatus = matchesWorkflowStatusFilter(item.workflowStatus, appliedFilters.status)
 
       return matchesStatus
     })
@@ -427,13 +406,13 @@ function SubmissionHistory() {
 
   const handleResetFilters = () => {
     setDraftSearch('')
-    setDraftStatus('All Status')
+    setDraftStatus('ALL')
     setDraftFromDate('')
     setDraftToDate('')
     setDateRangeError('')
     setAppliedFilters({
       search: '',
-      status: 'All Status',
+      status: 'ALL',
       fromDate: '',
       toDate: '',
     })
@@ -441,46 +420,20 @@ function SubmissionHistory() {
   }
 
   const renderStatusBadge = (status) => {
-    const type = getStatusType(status)
-    let displayStatus = status || 'Unknown'
-    if (status === 'Pending') displayStatus = 'RM Pending'
-    else if (status === 'Under Review') displayStatus = 'CM Pending'
-    else if (status === 'Returned') displayStatus = 'BO Returned'
-    
-    switch (type) {
-      case 'pending-rm':
-        return (
-          <span className="status-pill status-pill--pending-rm">
-            <Clock size={14} /> {displayStatus}
-          </span>
-        )
-      case 'under-review':
-        return (
-          <span className="status-pill status-pill--under-review">
-            <RefreshCw size={14} /> {displayStatus}
-          </span>
-        )
-      case 'submitted':
-        return (
-          <span className="status-pill status-pill--submitted">
-            <CheckCircle2 size={14} /> {displayStatus}
-          </span>
-        )
-      case 'returned-rm':
-        return (
-          <span className="status-pill status-pill--returned-rm">
-            <RotateCcw size={14} /> {displayStatus}
-          </span>
-        )
-      case 'approved-rm':
-        return (
-          <span className="status-pill status-pill--approved-rm">
-            <CheckCircle2 size={14} /> {displayStatus}
-          </span>
-        )
-      default:
-        return <span className="status-pill">{displayStatus}</span>
-    }
+    const presentation = getWorkflowStatusPresentation(status)
+    const Icon = presentation.badgeType === 'returned-rm'
+      ? RotateCcw
+      : presentation.badgeType === 'under-review'
+        ? RefreshCw
+        : presentation.badgeType === 'pending-rm'
+          ? Clock
+          : CheckCircle2
+
+    return (
+      <span className={`status-pill status-pill--${presentation.badgeType}`}>
+        <Icon size={14} /> {presentation.displayName}
+      </span>
+    )
   }
 
   const formatDate = (dateString) => formatDateTime(dateString, '-')
@@ -552,7 +505,7 @@ function SubmissionHistory() {
               name="status"
               value={draftStatus}
               onChange={(e) => setDraftStatus(e.target.value)}
-              options={STATUS_OPTIONS}
+              options={WORKFLOW_STATUS_FILTERS}
               placeholder="All Status"
             />
           </div>
@@ -678,7 +631,7 @@ function SubmissionHistory() {
                       <td>{item.mobileNumber}</td>
                       <td>{formatCurrency(item.expectedLoanAmount)}</td>
                       <td>{formatDate(item.createdAt)}</td>
-                      <td>{renderStatusBadge(item.status)}</td>
+                      <td>{renderStatusBadge(item.workflowStatus)}</td>
                       <td>
                         <div className="history-actions-cell">
                           <button
@@ -689,7 +642,7 @@ function SubmissionHistory() {
                           >
                             <Eye size={15} strokeWidth={1.8} /> View Details
                           </button>
-                          {getStatusType(item.status) === 'new-rm' && (
+                          {isNewApplication(item.workflowStatus) && (
                             <>
                               <button
                                 type="button"

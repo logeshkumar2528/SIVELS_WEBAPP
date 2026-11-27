@@ -78,6 +78,41 @@ describe('session', () => {
     });
   });
 
+  it('preserves a backend-assigned Credit Manager role name separately from module classification', () => {
+    const response = {
+      role: 'CreditManager',
+      roleCode: 'CREDIT_MANAGER',
+      roleId: 11,
+      roleName: 'ABH',
+      departmentCode: 'CREDIT',
+      staffId: 23,
+      staffCode: 'CM00003',
+      legacyId: 9,
+      permissions: ['CREDIT.VIEW'],
+      creditManager: { creditManagerId: 9, fullName: 'Assigned User' },
+    };
+    const user = buildLoginUser(response, '9000000001');
+    persistRoleSession(response, user);
+
+    expect(user).toMatchObject({
+      role: 'CreditManager',
+      roleCode: 'CREDIT_MANAGER',
+      roleId: 11,
+      roleName: 'ABH',
+      staffId: 23,
+      staffCode: 'CM00003',
+      legacyId: 9,
+    });
+    expect(JSON.parse(localStorage.getItem('creditManagerAuth'))).toMatchObject({
+      creditManagerId: 9,
+      role: 'CreditManager',
+      roleName: 'ABH',
+      staffId: 23,
+      staffCode: 'CM00003',
+    });
+    expect(JSON.parse(localStorage.getItem('sivels_currentUser')).roleName).toBe('ABH');
+  });
+
   it('sends customers to the customer dashboard', () => {
     const response = {
       role: 'Customer',

@@ -71,6 +71,7 @@ export function useVerificationWorkspace(agentCustomerId) {
       if (rawPayload && isMountedRef.current) {
         const mapped = mapApplicationFullDetails(rawPayload, extraDocs);
         setVerificationData(mapped);
+        return mapped;
       } else if (isMountedRef.current) {
         setError(`No application records found for Customer ID: ${agentCustomerId}`);
       }

@@ -4,6 +4,7 @@ import { getStoredRoleCode, getStoredUser } from '../../../../Core/src/auth/sess
 import { PERMISSIONS_CHANGED_EVENT } from '../../../../Core/src/auth/permissions';
 import operationsService from '../services/operationsService';
 import operationsApplicationService from '../services/operationsApplicationService';
+import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
 
 const OperationsApplicationContext = createContext(null);
 
@@ -47,6 +48,11 @@ function normalizeQueueApplication(record) {
   const source = unwrapRecord(record);
   const agentCustomerId = readValue(source, 'agentCustomerId', 'AgentCustomerId');
   if (agentCustomerId === null) return null;
+  const sourceWorkflowStatus = extractWorkflowStatus(source);
+  const recordWorkflowStatus = extractWorkflowStatus(record);
+  const workflowStatus = sourceWorkflowStatus.hasDetailedWorkflowStatus
+    ? sourceWorkflowStatus
+    : recordWorkflowStatus;
 
   return {
     ...source,
@@ -56,6 +62,9 @@ function normalizeQueueApplication(record) {
     operationsStatus: String(readValue(source, 'operationsStatus', 'OperationsStatus') || ''),
     statusChangedAt: readValue(source, 'statusChangedAt', 'StatusChangedAt'),
     profileImagePath: String(readValue(source, 'profileImagePath', 'ProfileImagePath') || ''),
+    workflowStatus,
+    workflowStatusCode: workflowStatus.workflowStatusCode,
+    workflowStatusName: workflowStatus.workflowStatusName,
   };
 }
 
@@ -64,6 +73,11 @@ function normalizeApplication(record, requestedId) {
   if (!source || typeof source !== 'object') return null;
 
   const agentCustomerId = readValue(source, 'agentCustomerId', 'AgentCustomerId') ?? requestedId;
+  const sourceWorkflowStatus = extractWorkflowStatus(source);
+  const recordWorkflowStatus = extractWorkflowStatus(record);
+  const workflowStatus = sourceWorkflowStatus.hasDetailedWorkflowStatus
+    ? sourceWorkflowStatus
+    : recordWorkflowStatus;
   return {
     ...source,
     agentCustomerId: String(agentCustomerId),
@@ -85,6 +99,9 @@ function normalizeApplication(record, requestedId) {
     loanAccountNumber: readValue(source, 'loanAccountNumber', 'LoanAccountNumber'),
     profileImagePath: readValue(source, 'profileImagePath', 'ProfileImagePath') || '',
     assignedMakerStaffId: readValue(source, 'assignedMakerStaffId', 'AssignedMakerStaffId'),
+    workflowStatus,
+    workflowStatusCode: workflowStatus.workflowStatusCode,
+    workflowStatusName: workflowStatus.workflowStatusName,
   };
 }
 

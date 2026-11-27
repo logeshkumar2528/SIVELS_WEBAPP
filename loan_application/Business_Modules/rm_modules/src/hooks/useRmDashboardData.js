@@ -7,9 +7,10 @@ import {
   buildAllowedAgentIdSet,
   filterAgentsForRm,
   getCurrentRMContext,
-  normalizeApplicationStatus,
   resolveApiArray,
 } from '../utils/rmContext';
+import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
+import { RM_WORKFLOW_CODES, isRmDownstreamStatus } from '../utils/rmWorkflowStatus';
 import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 import { buildApplicationDisplayId } from '../pages/applicationWizard/flowUtils';
 
@@ -55,14 +56,7 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}, rejections =
     item.rmCustomerId ||
     item.rMCustomerId ||
     `${index + 1}`;
-  let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
-
-  if (rejections && rejections.length > 0) {
-    const hasActiveReturn = rejections.some((r) => r.status === 'ReturnedToRM');
-    if (hasActiveReturn) {
-      normalizedStatus = 'Returned';
-    }
-  }
+  const workflowStatus = extractWorkflowStatus(item);
 
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
   const officialAppId = item.appId || item.AppId || item.App_Id || null;
@@ -81,8 +75,11 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}, rejections =
     agentName: ownership.agentName,
     createdDate: formatDate(item.createdAt || item.createdDate),
     rawCreatedAt: item.createdAt || item.createdDate || '',
-    status: normalizedStatus,
-    rawStatus: normalizedStatus,
+    workflowStatus,
+    workflowStatusCode: workflowStatus.workflowStatusCode,
+    workflowStatusName: workflowStatus.workflowStatusName,
+    status: workflowStatus.workflowStatusName || 'Status unavailable',
+    rawStatus: workflowStatus.legacyStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || item.rmCustomerId || item.rMCustomerId || null,
     agentId: ownership.agentId,
     rmId: ownership.rmId,
@@ -94,22 +91,21 @@ const mapApplication = (item, index, agentsById = {}, rmsById = {}, rejections =
 
 const buildStatusSummary = (applications) => {
   const groups = [
-    { label: 'New', color: '#0284C7' },
-    { label: 'Pending', color: '#F59E0B' },
-    { label: 'Under Review', color: '#A855F7' },
-    { label: 'Logged to HO', color: '#22C55E' },
-    { label: 'Returned', color: '#EF4444' },
+    { label: 'New Application', codes: [RM_WORKFLOW_CODES.NEW], color: '#0284C7' },
+    { label: 'RM Verification Pending', codes: [RM_WORKFLOW_CODES.RM_PENDING], color: '#F59E0B' },
+    { label: 'RM Verification In Progress', codes: [RM_WORKFLOW_CODES.RM_IN_PROGRESS], color: '#A855F7' },
+    { label: 'Back Office / Downstream', codes: null, color: '#22C55E' },
+    { label: 'Returned to RM', codes: [RM_WORKFLOW_CODES.RETURNED_TO_RM], color: '#EF4444' },
+    { label: 'Status unavailable', unavailable: true, color: '#94A3B8' },
   ];
-
-  const counts = applications.reduce((acc, app) => {
-    const status = app.status || 'New';
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {});
 
   const total = applications.length || 1;
   return groups.map((group) => {
-    const value = counts[group.label] || 0;
+    const value = applications.filter((app) => {
+      if (group.unavailable) return !app.workflowStatus?.hasDetailedWorkflowStatus;
+      if (group.codes) return group.codes.includes(app.workflowStatus?.workflowStatusCode);
+      return isRmDownstreamStatus(app.workflowStatus);
+    }).length;
     return {
       ...group,
       value,
@@ -142,9 +138,9 @@ const buildAgentPerformance = (applications, agents) => {
     if (!record) return;
 
     record.totalCustomers += 1;
-    if (normalizeText(app.status) === 'pending') record.pendingVerification += 1;
-    if (normalizeText(app.status) === 'logged to ho') record.submitted += 1;
-    if (normalizeText(app.status) !== 'returned') record.activeCustomers += 1;
+    if (app.workflowStatusCode === RM_WORKFLOW_CODES.RM_PENDING) record.pendingVerification += 1;
+    if (app.workflowStatusCode === RM_WORKFLOW_CODES.BO_PENDING) record.submitted += 1;
+    if (app.workflowStatusCode !== RM_WORKFLOW_CODES.RETURNED_TO_RM) record.activeCustomers += 1;
   });
 
   return [...performanceByAgent.values()].map((record, index) => ({
@@ -398,10 +394,10 @@ export function useRmDashboardData() {
         const totalApplications = applications.length;
 
         const badgeCounts = {
-          newApplications: applications.filter((app) => normalizeText(app.status) === 'new').length,
-          verification: applications.filter((app) => normalizeText(app.status) === 'pending').length,
-          returned: applications.filter((app) => normalizeText(app.status) === 'returned').length,
-          approved: applications.filter((app) => normalizeText(app.status) === 'logged to ho').length,
+          newApplications: applications.filter((app) => app.workflowStatusCode === RM_WORKFLOW_CODES.NEW).length,
+          verification: applications.filter((app) => app.workflowStatusCode === RM_WORKFLOW_CODES.RM_PENDING).length,
+          returned: applications.filter((app) => app.workflowStatusCode === RM_WORKFLOW_CODES.RETURNED_TO_RM).length,
+          approved: applications.filter((app) => app.workflowStatusCode === RM_WORKFLOW_CODES.BO_PENDING).length,
           customerSubmissionHistory: myDirectCustomers.length,
           submissionHistory: totalApplications,
           myAgents: myAgentsList.length,
@@ -410,41 +406,9 @@ export function useRmDashboardData() {
         const approvedLoansCount = badgeCounts.approved;
         const submissionHistoryCount = totalApplications;
 
-        // Calculate genuine In-Progress drafts from localStorage without duplicating Pending
-        let inProgressCount = 0;
-        try {
-          const storedDraftsRaw = localStorage.getItem('sivels-rm-onboarding-drafts-v9');
-          if (storedDraftsRaw) {
-            const storedDrafts = JSON.parse(storedDraftsRaw);
-            const draftValues = Object.values(storedDrafts);
-            inProgressCount = draftValues.filter((draft) => {
-              if (!draft) return false;
-              const isApproved =
-                normalizeText(draft.status) === 'approved' ||
-                normalizeText(draft.status) === 'logged to ho' ||
-                draft.rawStatus === 2 ||
-                draft.rawStatus === '2';
-              if (isApproved) return false;
-              if (draft.agentId && allowedAgentIds.size > 0 && !allowedAgentIds.has(Number(draft.agentId))) {
-                return false;
-              }
-              if ((!draft.agentId || draft.agentId === '' || draft.agentId === 0) && draft.rmId && Number(draft.rmId) !== Number(rmContext.rmId)) {
-                return false;
-              }
-              const hasProgress = Boolean(
-                draft.sections?.personalInformation?.applicant?.firstName ||
-                draft.personalInformation?.applicant?.firstName ||
-                draft.sections?.addressDetails?.applicant?.addressLine1 ||
-                draft.addressDetails?.applicant?.addressLine1 ||
-                draft.applicationProductDetailsId ||
-                (draft._isHydrated && draft.status !== 'New')
-              );
-              return hasProgress;
-            }).length;
-          }
-        } catch {
-          inProgressCount = 0;
-        }
+        const inProgressCount = applications.filter(
+          (app) => app.workflowStatusCode === RM_WORKFLOW_CODES.RM_IN_PROGRESS
+        ).length;
 
         const statusSummaryData = buildStatusSummary(applications);
         const agentPerformanceData = buildAgentPerformance(applications, myAgentsList);

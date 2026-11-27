@@ -15,9 +15,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import backOfficeService from '../api/backOfficeService';
-import { mapAgent, mapCustomer, mapDistrict, mapRM } from '../mappers/hierarchyMapper';
+import { getValue, mapAgent, mapCustomer, mapDistrict, mapRM } from '../mappers/hierarchyMapper';
 import { resolveApplicationOwnership } from '../utils/ownershipHelper';
 import { summarizeReadiness } from '../utils/readinessHelper';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
+
+const BACK_OFFICE_QUEUE_CODES = new Set([
+  'BO_VERIFICATION_PENDING',
+  'BO_VERIFICATION_IN_PROGRESS',
+  'RETURNED_TO_BO_CORRECTION_PENDING',
+]);
 
 const unwrapList = (response) => {
   if (Array.isArray(response)) return response;
@@ -38,22 +45,36 @@ const enrichCustomers = async (rawCustomers, rawRms, rawAgents, rawProductDetail
     }
   });
 
-  const baseCustomers = rawCustomers
-    .map(mapCustomer)
-    .filter(Boolean)
-    .filter((customer) => Number(customer.status) >= 2)
+  const normalizedCustomers = rawCustomers
+    .map((rawCustomer) => ({
+      customer: mapCustomer(rawCustomer),
+      workflowStatus: extractWorkflowStatus(rawCustomer),
+    }))
+    .filter(({ customer }) => Boolean(customer))
     .map((customer) => {
-      const ownership = resolveApplicationOwnership(customer, agentById, rmById);
-      const custId = String(customer.agentCustomerId || customer.id);
+      const ownership = resolveApplicationOwnership(customer.customer, agentById, rmById);
+      const custId = String(customer.customer.agentCustomerId || customer.customer.id);
       const prod = prodByCustomerId.get(custId);
       const appProdId =
         prod?.applicationProductDetailsId ||
-        customer.applicationProductDetailsId ||
+        customer.customer.applicationProductDetailsId ||
         null;
+      const loanProductId =
+        customer.customer.loanProductId ??
+        getValue(prod, 'loanProductId', 'LoanProductId');
+      const loanProductName =
+        customer.customer.loanProductName ||
+        getValue(prod, 'loanProductName', 'LoanProductName', 'productName', 'ProductName') ||
+        '';
 
       return {
-        ...customer,
+        ...customer.customer,
+        workflowStatus: customer.workflowStatus,
+        workflowStatusCode: customer.workflowStatus.workflowStatusCode,
+        workflowStatusName: customer.workflowStatus.workflowStatusName,
         applicationProductDetailsId: appProdId,
+        loanProductId,
+        loanProductName,
         agentId: ownership.agentId,
         agentName: ownership.agentName,
         rmId: ownership.rmId,
@@ -64,6 +85,12 @@ const enrichCustomers = async (rawCustomers, rawRms, rawAgents, rawProductDetail
       };
     });
 
+  const baseCustomers = normalizedCustomers.filter((customer) => (
+    customer.workflowStatusCode
+      ? BACK_OFFICE_QUEUE_CODES.has(customer.workflowStatusCode)
+      : Number(customer.workflowStatus?.legacyStatus ?? customer.status) >= 2
+  ));
+
   // Step 15 readiness is evaluated by the server: one call per HO application, in parallel.
   const readinessResults = await Promise.allSettled(
     baseCustomers.map((customer) =>
@@ -73,7 +100,7 @@ const enrichCustomers = async (rawCustomers, rawRms, rawAgents, rawProductDetail
     )
   );
 
-  return baseCustomers.map((customer, idx) => {
+  const customers = baseCustomers.map((customer, idx) => {
     const readiness = summarizeReadiness(
       readinessResults[idx]?.status === 'fulfilled' ? readinessResults[idx].value : null
     );
@@ -89,10 +116,13 @@ const enrichCustomers = async (rawCustomers, rawRms, rawAgents, rawProductDetail
       hasCibilReport: readiness.hasCibil,
     };
   });
+
+  return { allCustomers: normalizedCustomers, customers };
 };
 
 export function useCustomerQueue() {
   const [customers, setCustomers] = useState([]);
+  const [allCustomers, setAllCustomers] = useState([]);
   const [rmsCount, setRmsCount] = useState(0);
   const [agentsCount, setAgentsCount] = useState(0);
   const [districtsCount, setDistrictsCount] = useState(0);
@@ -122,7 +152,7 @@ export function useCustomerQueue() {
       const mappedAgents = rawAgents.map(mapAgent).filter(Boolean);
       const mappedDistricts = rawDistricts.map(mapDistrict).filter(Boolean);
 
-      const mapped = await enrichCustomers(
+      const { allCustomers: mappedAllCustomers, customers: mapped } = await enrichCustomers(
         unwrapList(customerResult.value),
         rawRms,
         rawAgents,
@@ -130,6 +160,7 @@ export function useCustomerQueue() {
       );
 
       if (isMounted) {
+        setAllCustomers(mappedAllCustomers);
         setCustomers(mapped);
         setRmsCount(mappedRms.length);
         setAgentsCount(mappedAgents.length);
@@ -179,7 +210,7 @@ export function useCustomerQueue() {
         const mappedAgents = rawAgents.map(mapAgent).filter(Boolean);
         const mappedDistricts = rawDistricts.map(mapDistrict).filter(Boolean);
 
-        const mapped = await enrichCustomers(
+        const { allCustomers: mappedAllCustomers, customers: mapped } = await enrichCustomers(
           unwrapList(customerResult.value),
           rawRms,
           rawAgents,
@@ -187,6 +218,7 @@ export function useCustomerQueue() {
         );
 
         if (active) {
+          setAllCustomers(mappedAllCustomers);
           setCustomers(mapped);
           setRmsCount(mappedRms.length);
           setAgentsCount(mappedAgents.length);
@@ -216,6 +248,7 @@ export function useCustomerQueue() {
 
   return {
     customers,
+    allCustomers,
     rmsCount,
     agentsCount,
     districtsCount,

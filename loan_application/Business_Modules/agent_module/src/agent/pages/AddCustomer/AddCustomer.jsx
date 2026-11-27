@@ -33,8 +33,10 @@ import {
 } from '../../../../../../Core/src/services/customerDocumentService'
 import { useLoading } from '../../../../../../Core/src/context/LoadingContext'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
-import { getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
+import { extractApiErrorMessage, getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
+import { emptyWorkflowStatus, extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus'
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../../Core/src/utils/amountHelper'
+import { WORKFLOW_STATUS_CODES } from '../../utils/workflowStatusDisplay'
 
 function AddCustomer() {
   const navigate = useNavigate()
@@ -102,6 +104,8 @@ function AddCustomer() {
   const [submittedData, setSubmittedData] = useState(null)
   const [createdCustomerId, setCreatedCustomerId] = useState(null)
   const [uploadedDocuments, setUploadedDocuments] = useState([])
+  const [workflowStatus, setWorkflowStatus] = useState(emptyWorkflowStatus())
+  const [submissionConfirmed, setSubmissionConfirmed] = useState(false)
 
   // Fetch Master Data on Mount
   useEffect(() => {
@@ -642,6 +646,7 @@ function AddCustomer() {
             }
 
             const createResponse = await agentCustomerService.createCustomer(customerPayload)
+            setWorkflowStatus(extractWorkflowStatus(createResponse))
             agentCustomerId =
               createResponse?.agentCustomerId ||
               createResponse?.id ||
@@ -739,6 +744,7 @@ function AddCustomer() {
             submissionDate: formattedDateTime,
             referenceId: `REF${agentCustomerId}`,
           })
+          setSubmissionConfirmed(false)
         }
       }, {
         message: isEditMode
@@ -764,10 +770,57 @@ function AddCustomer() {
     setShowConfirmModal(false)
   }
 
+  const handleSubmitToRm = async () => {
+    if (submitting || submissionConfirmed || !createdCustomerId) return
+
+    setSubmitting(true)
+    setGlobalError(null)
+
+    try {
+      const transitionResponse = await agentCustomerService.updateCustomer(createdCustomerId, {
+        status: 1,
+      })
+
+      let confirmedRecord = transitionResponse
+      try {
+        confirmedRecord = await agentCustomerService.getCustomerById(createdCustomerId)
+      } catch (refreshError) {
+        console.warn('RM submission succeeded but the latest customer detail could not be refreshed', refreshError)
+      }
+
+      const refreshedStatus = extractWorkflowStatus(confirmedRecord)
+      const transitionStatus = extractWorkflowStatus(transitionResponse)
+      const confirmedStatus = refreshedStatus.workflowStatusCode !== null || refreshedStatus.legacyStatus !== null
+        ? refreshedStatus
+        : transitionStatus
+      const hasExplicitStatus = confirmedStatus.workflowStatusCode !== null || confirmedStatus.legacyStatus !== null
+      const isRmPending =
+        confirmedStatus.workflowStatusCode === WORKFLOW_STATUS_CODES.RM_VERIFICATION_PENDING ||
+        confirmedStatus.legacyStatus === 1
+
+      if (hasExplicitStatus && !isRmPending) {
+        throw new Error('The server did not confirm the RM Verification Pending status. Please retry.')
+      }
+
+      setWorkflowStatus(confirmedStatus)
+      setSubmissionConfirmed(true)
+    } catch (err) {
+      console.error('Failed to submit customer to RM', err)
+      const apiError = getApiErrorMessage(err)
+      const message = extractApiErrorMessage(err, apiError?.global || 'Unable to submit the customer to RM. Please try again.')
+      setGlobalError(message)
+      window.scrollTo(0, 0)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleResetForm = () => {
     setSubmittedData(null)
     setCreatedCustomerId(null)
     setUploadedDocuments([])
+    setWorkflowStatus(emptyWorkflowStatus())
+    setSubmissionConfirmed(false)
     initialPreloadDoneRef.current = false
     setFormData({
       fullName: '',
@@ -1344,6 +1397,11 @@ function AddCustomer() {
           mobileNumber={submittedData.mobileNumber}
           submissionDate={submittedData.submissionDate}
           referenceId={submittedData.referenceId}
+          workflowStatus={workflowStatus}
+          isSubmittedToRm={submissionConfirmed}
+          submitting={submitting}
+          submissionError={globalError}
+          onSubmitToRm={handleSubmitToRm}
           autoCloseSeconds={5}
           onAddAnother={handleResetForm}
           onGoToHistory={() => navigate('/Agent/submission-history')}

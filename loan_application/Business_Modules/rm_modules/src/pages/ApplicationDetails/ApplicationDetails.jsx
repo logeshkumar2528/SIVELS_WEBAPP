@@ -31,7 +31,7 @@ import { formatDateTimeSeconds as formatDateTime } from '../../utils/dateHelper'
 import { buildValidationPopup, parseApiErrorBody } from '../../utils/formatUserFacingError';
 import { buildApplicationDisplayId, resolveApplicantName } from '../applicationWizard/flowUtils';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
-import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 import ApplicationTopSummary from '../../components/ApplicationTopSummary/ApplicationTopSummary';
 import ApplicationLockBanner from '../../components/ApplicationLockBanner/ApplicationLockBanner';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
@@ -74,46 +74,6 @@ function isFieldAgentChannel(option) {
 
   return code === 'fa' || code === 'fieldagent' ||
     name.includes('field agent') || normalizedName.includes('fieldagent');
-}
-
-
-async function updateCustomerStatusToInProgress(baseUrl, customerId, record = {}) {
-  if (!customerId) return;
-
-  try {
-    let baseRecord = record;
-    const getRes = await apiFetch(`${baseUrl}/AgentAddCustomer/${customerId}`);
-    if (getRes.ok) {
-      const data = await getRes.json();
-      const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-      if (cust) baseRecord = cust;
-    }
-
-    const currentStatus = Number(baseRecord.status ?? baseRecord.Status ?? 0);
-    // Progression protection: only update if status is 0 (Draft / Newly Created)
-    if (currentStatus >= 1) {
-      return; // Already in progress (1) or approved (2)
-    }
-
-    const payload = {
-      ...baseRecord,
-      status: 1,
-    };
-
-    const putRes = await apiFetch(`${baseUrl}/AgentAddCustomer/${customerId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!putRes.ok && putRes.status !== 204) {
-      console.warn(`[ApplicationDetails] Auto status progression to Pending returned ${putRes.status}`);
-    }
-  } catch (err) {
-    console.warn('[ApplicationDetails] Failed to auto-update status to Pending:', err);
-  }
 }
 
 function validateApplication(record = {}, requiresVariation = false, isRmSourced = false, selectedLoanTypeId = '', loanProductOptions = []) {
@@ -255,18 +215,6 @@ export default function ApplicationDetails() {
         if (active && record) {
           setDisplayRecord(record);
           setAgentBranch('');
-          const rawStatus = Number(record?.rawStatus ?? record?.status ?? record?.Status ?? 0);
-          const currentStatus = normalizeApplicationStatus(record.status, record.statusName || record.StatusName);
-
-          // Update status to 1 (In Progress) if newly created (status 0) and not in view mode
-          if (!isViewMode && (rawStatus === 0 || currentStatus === 'New' || record.status === 'Draft') && appId) {
-            try {
-              await updateCustomerStatusToInProgress(baseUrl, appId, record);
-              saveApplication(appId, { status: 'Pending', rawStatus: 1 });
-            } catch (statusError) {
-              console.error('Failed to update status to 1 on Step 1 start:', statusError);
-            }
-          }
 
           const customer = record.raw?.customer || record.customer || record;
           const createdByRole = String(
@@ -1319,7 +1267,7 @@ export default function ApplicationDetails() {
   const branchName = agentBranch || appData.branch || displayRecord?.branch || 'Chennai Main Branch';
   const submittedTime = formatDateTime(appData.createdDate || displayRecord?.createdAt || displayRecord?.createdDate || '');
   const applicationDisplayId = buildApplicationDisplayId(displayRecord || appData, appId) || appId;
-  const statusText = appData.status || displayRecord?.status || 'New';
+  const workflowStatus = extractWorkflowStatus(displayRecord || appData);
   const ownership = resolveApplicationOwnership(displayRecord || appData);
   const isRmSourced = Boolean(ownership.isDirectRm);
   const sourcingDisplayName = isRmSourced
@@ -1375,7 +1323,7 @@ export default function ApplicationDetails() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <StatusBadge status={statusText} />
+              <StatusBadge workflowStatus={workflowStatus} />
               <Button
                 variant="secondary"
                 size="sm"

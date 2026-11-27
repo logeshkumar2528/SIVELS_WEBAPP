@@ -1,6 +1,8 @@
 export function formatCurrency(amount) {
+  const isEmpty = amount === null || amount === undefined || (typeof amount === 'string' && amount.trim() === '');
   const num = Number(amount);
-  if (!amount || isNaN(num) || num === 0) return '₹0';
+  if (isEmpty || !Number.isFinite(num)) return '—';
+  if (num === 0) return '₹0';
   if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)} Cr`;
   if (num >= 100000) return `₹${(num / 100000).toFixed(2)} L`;
   return new Intl.NumberFormat('en-IN', {
@@ -8,6 +10,20 @@ export function formatCurrency(amount) {
     currency: 'INR',
     maximumFractionDigits: 0,
   }).format(num);
+}
+
+export function summarizeAmount(list, field) {
+  const values = list.map((item) => {
+    const value = item?.[field];
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  });
+  const complete = values.every((value) => value !== null);
+  return {
+    total: complete ? values.reduce((total, value) => total + value, 0) : null,
+    complete,
+  };
 }
 
 export function parseDate(value) {

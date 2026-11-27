@@ -18,6 +18,7 @@ import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { rmCustomerService } from '../../services/rmCustomerService';
 import { getCurrentRMContext } from '../../utils/rmContext';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 import {
   getCustomerDocumentTypes,
   normalizeAgentCustomerDocument,
@@ -446,7 +447,8 @@ export default function ViewCustomerDrawer({
   };
 
   const submittedOn = formatDate(customer.createdAt);
-  const status = customer.status || 'New';
+  const workflowStatus = customer.workflowStatus || extractWorkflowStatus(customer);
+  const status = workflowStatus.workflowStatusName || 'Status unavailable';
 
   // Resolve Names
   let productName = customer.loanProductName || customer.productName;

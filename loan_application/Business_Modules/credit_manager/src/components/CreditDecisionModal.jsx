@@ -12,10 +12,11 @@
 import React, { useEffect, useState } from 'react';
 import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import creditManagerService from '../api/creditManagerService';
-import { getCreditManagerId } from '../auth/authStorage';
+import { getCreditManagerAuth, getCreditManagerId } from '../auth/authStorage';
 import ReturnIssuesBuilder from './ReturnIssuesBuilder';
 import { mapApprovingAuthority } from '../mappers/creditMapper';
 import { formatApprovalRange, limitExceededReason } from './ApprovalEscalation';
+import { extractApiErrorMessage } from '../../../../Core/src/utils/apiErrorHandler';
 
 export const REMARKS_MAX = 2000;
 
@@ -68,7 +69,7 @@ export function getErrorMessage(err, fallback) {
     const first = Object.values(data.errors).flat()[0];
     if (first) return String(first);
   }
-  return err?.message || fallback;
+  return extractApiErrorMessage(err, fallback);
 }
 
 function positive(value) {
@@ -87,6 +88,7 @@ export default function CreditDecisionModal({
   approvalCheck = null,
   initialIssues = [],
   onIssuesChange,
+  canSubmitAction = true,
   onClose,
   onSubmitted,
 }) {
@@ -131,7 +133,22 @@ export default function CreditDecisionModal({
     sanctionedTenure <= 480;
   const checkLoading = isApprove && Boolean(approvalCheck?.loading);
   const limitReason = isApprove ? limitExceededReason(approvalCheck) : '';
-  const approveBlocked = isApprove && (termsLoading || !hasSanctionTerms || checkLoading || Boolean(limitReason));
+  const approvalAmountMatches =
+    !isApprove ||
+    (approvalCheck?.amount != null && Number(approvalCheck.amount) === Number(sanctionedAmount));
+  const approvalCheckUnavailable = isApprove && (!approvalCheck || !approvalAmountMatches);
+  const approvalCheckReason = isApprove && approvalCheckUnavailable
+    ? approvalCheck?.loading
+      ? 'Checking approval limit…'
+      : 'Approval limit confirmation is not available for the current sanctioned amount.'
+    : '';
+  const approveBlocked = isApprove && (
+    termsLoading ||
+    !hasSanctionTerms ||
+    checkLoading ||
+    approvalCheckUnavailable ||
+    Boolean(limitReason)
+  );
   const forwardBlocked = isForward && (authorities.loading || authorities.list.length === 0);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -162,9 +179,15 @@ export default function CreditDecisionModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting || approveBlocked || forwardBlocked || !validate()) return;
+    if (submitting || approveBlocked || forwardBlocked || !canSubmitAction || !validate()) {
+      if (!canSubmitAction) {
+        setSubmitError('This application is no longer assigned to you for a Credit Manager decision.');
+      }
+      return;
+    }
 
-    const creditManagerId = getCreditManagerId();
+    const auth = typeof getCreditManagerAuth === 'function' ? getCreditManagerAuth() : null;
+    const creditManagerId = auth?.creditManagerId ?? getCreditManagerId();
     if (!creditManagerId) {
       setSubmitError('Your Credit Manager session has expired. Please log in again.');
       return;
@@ -172,7 +195,7 @@ export default function CreditDecisionModal({
 
     const payload = {
       performedByUserId: Number(creditManagerId),
-      performedByRole: 'CreditManager',
+      performedByRole: auth?.role || 'CreditManager',
       remarks: form.remarks.trim(),
     };
     if (isReturn) {
@@ -259,6 +282,13 @@ export default function CreditDecisionModal({
             </div>
           )}
 
+          {approvalCheckReason && !limitReason && (
+            <div className="cm-form-alert" role="alert">
+              {AlertCircleIcon && <AlertCircleIcon size={16} />}
+              <span>{approvalCheckReason}</span>
+            </div>
+          )}
+
           {isForward && (
             <label className="cm-form-field cm-form-field--full">
               <span>Approving Authority *</span>
@@ -288,7 +318,7 @@ export default function CreditDecisionModal({
           {isApprove && (
             <div className="cm-form-grid">
               <div className="cm-form-field">
-                <span>Sanctioned Loan Amount (₹)</span>
+                <span>Proposed Loan Amount (₹)</span>
                 <div className="cm-form-readonly">
                   {termsLoading ? 'Loading…' : sanctionedAmount != null ? formatAmount(sanctionedAmount) : '—'}
                 </div>

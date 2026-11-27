@@ -1349,6 +1349,14 @@ export const backOfficeService = {
      14. APPLICATION WORKFLOW APIs (STEP 13)
   ========================================== */
 
+  startBackOfficeVerification: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      BACK_OFFICE_ENDPOINTS.APPLICATION_WORKFLOW_START_BACKOFFICE_VERIFICATION(agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
   /**
    * Return application to Relationship Manager (Status 2 -> 6).
    * @param {string|number} agentCustomerId

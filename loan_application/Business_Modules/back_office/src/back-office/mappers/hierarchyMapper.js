@@ -258,6 +258,14 @@ export function mapCustomer(customer) {
     'purposeOfLoan',
     'PurposeOfLoan'
   ) || '';
+  const loanProductId = getValue(customer, 'loanProductId', 'LoanProductId');
+  const loanProductName = getValue(
+    customer,
+    'loanProductName',
+    'LoanProductName',
+    'productName',
+    'ProductName'
+  ) || '';
   const employmentType = getValue(
     customer,
     'employmentTypeName',
@@ -325,6 +333,8 @@ export function mapCustomer(customer) {
     expectedLoanAmount: expectedLoanAmount != null ? Number(expectedLoanAmount) : null,
     loanAmount: expectedLoanAmount != null ? Number(expectedLoanAmount) : null,
     amount: expectedLoanAmount != null ? Number(expectedLoanAmount) : null,
+    loanProductId,
+    loanProductName,
     loanPurpose,
     loanType: loanPurpose || 'Personal Loan',
     employmentType: employmentType || 'Salaried',

@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import creditManagerService from '../api/creditManagerService';
 import { mapCreditManagerProfile } from '../mappers/creditMapper';
-import { getCreditManagerId } from '../auth/authStorage';
+import { getCreditManagerAuth, getCreditManagerId, getCreditManagerSessionKey } from '../auth/authStorage';
 import { masterService } from '../../../../Core/src/services/masterService';
 
 function unwrapLookup(response) {
@@ -40,8 +40,20 @@ export function useCreditManagerProfile() {
   const [profile, setProfile] = useState(INITIAL_PROFILE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sessionKey, setSessionKey] = useState(() => getCreditManagerSessionKey());
+
+  useEffect(() => {
+    const syncSession = () => setSessionKey(getCreditManagerSessionKey());
+    window.addEventListener('storage', syncSession);
+    window.addEventListener('sivels:permissions-changed', syncSession);
+    return () => {
+      window.removeEventListener('storage', syncSession);
+      window.removeEventListener('sivels:permissions-changed', syncSession);
+    };
+  }, []);
 
   const load = useCallback(async (isActive = () => true) => {
+    const requestSessionKey = sessionKey;
     setLoading(true);
     setError(null);
 
@@ -75,7 +87,16 @@ export function useCreditManagerProfile() {
       if (!liveProfile) {
         throw new Error('The profile API returned an empty response.');
       }
-      if (isActive()) setProfile(liveProfile);
+      const auth = getCreditManagerAuth();
+      const authenticatedProfile = {
+        ...liveProfile,
+        ...(auth?.creditManagerId != null ? { id: String(auth.creditManagerId), creditManagerId: auth.creditManagerId } : {}),
+        ...(auth?.fullName || auth?.name ? { fullName: auth.fullName || auth.name } : {}),
+        ...(auth?.staffCode || auth?.creditManagerCode
+          ? { creditManagerCode: auth.staffCode || auth.creditManagerCode } : {}),
+        ...(auth?.roleName || auth?.role ? { role: auth.roleName || auth.role } : {}),
+      };
+      if (isActive() && getCreditManagerSessionKey() === requestSessionKey) setProfile(authenticatedProfile);
     } catch (err) {
       if (isActive()) {
         setError(err?.response?.data?.message || err?.message || 'Failed to load profile details.');
@@ -83,15 +104,16 @@ export function useCreditManagerProfile() {
     } finally {
       if (isActive()) setLoading(false);
     }
-  }, []);
+  }, [sessionKey]);
 
   useEffect(() => {
     let active = true;
+    setProfile(INITIAL_PROFILE);
     load(() => active);
     return () => {
       active = false;
     };
-  }, [load]);
+  }, [load, sessionKey]);
 
   return {
     profile,

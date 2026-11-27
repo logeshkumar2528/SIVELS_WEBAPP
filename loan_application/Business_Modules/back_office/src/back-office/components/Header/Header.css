@@ -44,7 +44,7 @@
 
 /* Hamburger button */
 .header-menu-btn {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -311,6 +311,10 @@
 
 /* Hide date on tablet — title area needs space */
 @media (max-width: 1024px) {
+  .header-menu-btn {
+    display: flex;
+  }
+
   .header-date {
     display: none;
   }

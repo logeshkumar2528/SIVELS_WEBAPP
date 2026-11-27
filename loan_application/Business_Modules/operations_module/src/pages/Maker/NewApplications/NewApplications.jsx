@@ -8,6 +8,8 @@ import OperationsDocumentViewer from '../../../components/OperationsDocumentView
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import { ROUTES } from '../../../config/routeConfig';
 import operationsApplicationService from '../../../services/operationsApplicationService';
+import { extractApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus';
 import './NewApplications.css';
 
 const PAGE_SIZE = 10;
@@ -31,14 +33,8 @@ function sortByLatestStatusChange(applications) {
     .map(({ application }) => application);
 }
 
-function getStatusLabel(status) {
-  if (Number(status) === 4) return 'Approved';
-  if (status === undefined || status === null || String(status).trim() === '') return '—';
-  return String(status);
-}
-
 function getErrorMessage(error, fallback) {
-  return error?.response?.data?.message || error?.response?.data?.title || error?.message || fallback;
+  return extractApiErrorMessage(error, fallback);
 }
 
 function ProfileImage({ application }) {
@@ -143,8 +139,18 @@ export default function NewApplications() {
     setActionError('');
 
     try {
-      await operationsApplicationService.verifyNow(application.agentCustomerId);
-      await refreshQueue();
+      const transitionResponse = await operationsApplicationService.verifyNow(application.agentCustomerId);
+      const transitionStatus = extractWorkflowStatus(transitionResponse);
+      const refreshedQueues = await refreshQueue();
+      const refreshedApplication = refreshedQueues?.pendingApplications?.find(
+        (item) => String(item.agentCustomerId) === String(application.agentCustomerId)
+      );
+      const confirmedStatus = transitionStatus.workflowStatusCode
+        ? transitionStatus
+        : extractWorkflowStatus(refreshedApplication);
+      if (confirmedStatus.workflowStatusCode !== 'MAKER_VERIFICATION_IN_PROGRESS') {
+        throw new Error('The server did not confirm Maker Verification In Progress. Please refresh and retry.');
+      }
       navigate(`${ROUTES.MAKER_LOAN_BASIC_DETAILS}?applicationId=${encodeURIComponent(application.agentCustomerId)}`);
     } catch (verifyError) {
       if (!mountedRef.current) return;
@@ -237,8 +243,9 @@ export default function NewApplications() {
                         </td>
                         <td>
                           <div className="operations-new-applications-status">
-                            <span className="operations-new-applications-status-chip">{getStatusLabel(application.status)}</span>
-                            {application.operationsStatus && <small>{application.operationsStatus}</small>}
+                            <span className="operations-new-applications-status-chip">
+                              {application.workflowStatusName || 'Status unavailable'}
+                            </span>
                           </div>
                         </td>
                         <td><DocumentAction label="View" onClick={() => openDocument(application, 'form')} /></td>

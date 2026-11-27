@@ -35,8 +35,11 @@ export default function ApprovedDocumentsViewer({
   applicationProductDetailsId = null,
   creditDecision = null,
   initialLoanIdentifier = null,
+  showKfs = true,
 }) {
-  const [activeDoc, setActiveDoc] = useState(initialDocument || DOC_TYPES.SANCTION_LETTER);
+  const [activeDoc, setActiveDoc] = useState(
+    showKfs && initialDocument === DOC_TYPES.KFS ? DOC_TYPES.KFS : DOC_TYPES.SANCTION_LETTER
+  );
   const [autoDownloadTriggered, setAutoDownloadTriggered] = useState(false);
   const [loanIdentifier, setLoanIdentifier] = useState(initialLoanIdentifier || null);
   const [identifierLoading, setIdentifierLoading] = useState(false);
@@ -47,10 +50,10 @@ export default function ApprovedDocumentsViewer({
   // Sync active document when initialDocument changes
   useEffect(() => {
     if (initialDocument) {
-      setActiveDoc(initialDocument);
+      setActiveDoc(showKfs || initialDocument !== DOC_TYPES.KFS ? initialDocument : DOC_TYPES.SANCTION_LETTER);
       setAutoDownloadTriggered(false);
     }
-  }, [initialDocument, isOpen]);
+  }, [initialDocument, isOpen, showKfs]);
 
   // Close on Escape key
   useEffect(() => {
@@ -290,31 +293,33 @@ export default function ApprovedDocumentsViewer({
                 <FileText size={13} />
                 <span>Sanction Letter</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveDoc(DOC_TYPES.KFS);
-                  setAutoDownloadTriggered(false);
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  borderRadius: '6px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: activeDoc === DOC_TYPES.KFS ? '#ffffff' : 'transparent',
-                  color: activeDoc === DOC_TYPES.KFS ? '#0f172a' : '#64748b',
-                  boxShadow: activeDoc === DOC_TYPES.KFS ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <FileCheck size={13} />
-                <span>Key Facts Statement</span>
-              </button>
+              {showKfs && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDoc(DOC_TYPES.KFS);
+                    setAutoDownloadTriggered(false);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    backgroundColor: activeDoc === DOC_TYPES.KFS ? '#ffffff' : 'transparent',
+                    color: activeDoc === DOC_TYPES.KFS ? '#0f172a' : '#64748b',
+                    boxShadow: activeDoc === DOC_TYPES.KFS ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <FileCheck size={13} />
+                  <span>Key Facts Statement</span>
+                </button>
+              )}
             </div>
           </div>
 

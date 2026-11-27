@@ -29,6 +29,7 @@ function MainLayout({ title = '', subtitle = '', children }) {
   const { pathname } = useLocation();
   const { counts } = useCreditApplications();
   const { roleName, filterNav } = usePermissions();
+  const auth = getCreditManagerAuth();
 
   useEffect(() => {
     document.body.classList.toggle('body--no-scroll', sidebarOpen);
@@ -55,16 +56,15 @@ function MainLayout({ title = '', subtitle = '', children }) {
   }), [counts]);
 
   const user = useMemo(() => {
-    const auth = getCreditManagerAuth();
-    const title = roleName || 'Credit Manager';
+    const title = roleName || auth?.roleName || auth?.role || 'Credit Manager';
     return {
       id: auth?.creditManagerId ?? null,
-      name: auth?.name || 'Credit Manager',
-      role: auth?.creditManagerCode ? `${title} • ${auth.creditManagerCode}` : title,
+      name: auth?.fullName || auth?.name || 'Credit Manager',
+      role: auth?.staffCode || auth?.creditManagerCode ? `${title} • ${auth.staffCode || auth.creditManagerCode}` : title,
       imageRole: 'CreditManager',
       avatarUrl: null,
     };
-  }, [roleName]);
+  }, [auth?.creditManagerCode, auth?.creditManagerId, auth?.fullName, auth?.name, auth?.role, auth?.roleName, auth?.staffCode, roleName]);
 
   return (
     <div className={['layout', sidebarOpen ? 'layout--sidebar-open' : ''].join(' ').trim()}>

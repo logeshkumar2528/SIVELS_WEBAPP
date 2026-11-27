@@ -64,6 +64,14 @@ export const rmCustomerService = {
     return normalizeCustomerResponse(response?.data ?? { success: true });
   },
 
+  startRmVerification: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/start-rm-verification`,
+      payload
+    );
+    return response.data;
+  },
+
   deleteCustomer: async (id) => {
     const response = await axiosInstance.delete(`/AgentAddCustomer/${encodeURIComponent(id)}`);
     return response?.data ?? { success: true };

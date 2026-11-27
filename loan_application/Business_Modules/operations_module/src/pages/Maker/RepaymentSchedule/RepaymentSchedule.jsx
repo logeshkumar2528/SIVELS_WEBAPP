@@ -1,16 +1,24 @@
-import { ArrowLeft, ArrowRight, CheckCircle2, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, FileCheck, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import backOfficeService from '../../../../../back_office/src/back-office/api/backOfficeService';
 import { getStoredUser } from '../../../../../../Core/src/auth/session';
 import { formatIndianAmount } from '../../../../../../Core/src/utils/amountHelper';
+import approvalDocumentService from '../../../../../../Core/src/features/approval-documents/services/approvalDocumentService';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import OperationsLayout from '../../../layouts/OperationsLayout';
+import OperationsDocumentViewer from '../../../components/OperationsDocumentViewer';
+import operationsFeesService from '../../../services/operationsFeesService';
 import operationsRepaymentScheduleService, {
   getRepaymentScheduleApiErrorMessage,
 } from '../../../services/operationsRepaymentScheduleService';
+import {
+  buildOperationsKfsData,
+  resolveMakerStaffId,
+} from './operationsKfsAdapter';
+import KfsReport from '../../../../../../Core/src/features/approval-documents/components/KfsReport/KfsReport';
 import './RepaymentSchedule.css';
 
 const WORKFLOW_STEPS = [
@@ -292,12 +300,25 @@ export default function RepaymentSchedule() {
   const [savedState, setSavedState] = useState({ status: 'idle', schedule: null, details: [], error: '' });
   const [verifyState, setVerifyState] = useState({ status: 'idle', message: '' });
   const [buildState, setBuildState] = useState({ status: 'idle', message: '' });
+  const [kfsState, setKfsState] = useState({
+    status: 'idle',
+    decision: null,
+    fees: null,
+    existingDocument: null,
+    error: '',
+    verificationInvalidated: false,
+  });
+  const [kfsModalOpen, setKfsModalOpen] = useState(false);
+  const [kfsViewerOpen, setKfsViewerOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const requestSequenceRef = useRef(0);
+  const kfsRequestSequenceRef = useRef(0);
 
   const agentCustomerId = application?.agentCustomerId || applicationId;
   const contextProductId = application?.applicationProductDetailsId || application?.ApplicationProductDetailsId || null;
   const operationsUserId = resolveOperationsUserId(profile);
+  const storedUser = getStoredUser(['MAKER', 'CHECKER']) || {};
+  const makerStaffId = resolveMakerStaffId(profile, storedUser);
 
   useEffect(() => {
     const requestId = ++requestSequenceRef.current;
@@ -358,6 +379,47 @@ export default function RepaymentSchedule() {
     return () => { active = false; };
   }, [agentCustomerId, application, contextProductId, operationsUserId, profileError, profileLoading, reloadKey]);
 
+  useEffect(() => {
+    const productId = ids.applicationProductDetailsId || contextProductId;
+    if (savedState.status !== 'ready' || !agentCustomerId || !productId) {
+      setKfsState((current) => ({ ...current, status: 'idle', error: '' }));
+      return undefined;
+    }
+
+    const requestId = ++kfsRequestSequenceRef.current;
+    let active = true;
+    setKfsState((current) => ({ ...current, status: 'loading', error: '' }));
+
+    const loadKfsDependencies = async () => {
+      const [decisionResult, feesResult, documentResult] = await Promise.allSettled([
+        approvalDocumentService.getLatestCreditDecision(agentCustomerId),
+        operationsFeesService.getByCustomer(agentCustomerId, productId),
+        approvalDocumentService.getApplicationDocument(productId, 'KFS'),
+      ]);
+
+      if (!active || requestId !== kfsRequestSequenceRef.current) return;
+
+      const errors = [];
+      if (decisionResult.status === 'rejected') errors.push('Unable to load the latest approved credit decision.');
+      if (feesResult.status === 'rejected') errors.push('Unable to load saved Operations Fees.');
+      if (documentResult.status === 'rejected') errors.push('Unable to verify whether a saved KFS exists.');
+
+      setKfsState((current) => ({
+        ...current,
+        status: errors.length ? 'error' : 'ready',
+        decision: decisionResult.status === 'fulfilled' ? decisionResult.value : null,
+        fees: feesResult.status === 'fulfilled' ? feesResult.value : null,
+        existingDocument: documentResult.status === 'fulfilled' ? documentResult.value : null,
+        error: errors.join(' '),
+      }));
+    };
+
+    loadKfsDependencies();
+    return () => {
+      active = false;
+    };
+  }, [agentCustomerId, contextProductId, ids.applicationProductDetailsId, makerStaffId, savedState.status]);
+
   const requestPayload = useMemo(() => ({
     agentCustomerId: ids.agentCustomerId == null ? null : Number(ids.agentCustomerId),
     applicationProductDetailsId: ids.applicationProductDetailsId == null ? null : Number(ids.applicationProductDetailsId),
@@ -371,6 +433,43 @@ export default function RepaymentSchedule() {
   }), [savedState.details]);
   const busy = savedState.status === 'loading' || verifyState.status === 'loading' || buildState.status === 'loading';
   const actionsDisabled = busy || savedState.status === 'error' || !requestPayload.agentCustomerId || !requestPayload.applicationProductDetailsId || !requestPayload.createdBy;
+  const kfsData = useMemo(() => buildOperationsKfsData({
+    application,
+    decision: kfsState.decision,
+    schedule: savedState.schedule,
+    details: savedState.details,
+    fees: kfsState.fees,
+    agentCustomerId: requestPayload.agentCustomerId,
+    applicationProductDetailsId: requestPayload.applicationProductDetailsId,
+    makerStaffId,
+    invalidated: kfsState.verificationInvalidated,
+  }), [
+    application,
+    kfsState.decision,
+    kfsState.fees,
+    kfsState.verificationInvalidated,
+    makerStaffId,
+    requestPayload.agentCustomerId,
+    requestPayload.applicationProductDetailsId,
+    savedState.details,
+    savedState.schedule,
+  ]);
+  const canGenerateKfs = kfsState.status === 'ready' && kfsData.isEligible;
+
+  const handleOpenKfs = () => {
+    if (!canGenerateKfs || kfsModalOpen) return;
+    setKfsModalOpen(true);
+  };
+
+  const handleKfsPersisted = (document) => {
+    setKfsState((current) => ({
+      ...current,
+      existingDocument: document || current.existingDocument || { documentType: 'KFS' },
+      verificationInvalidated: false,
+    }));
+    setKfsModalOpen(false);
+    toast.success('KFS generated and stored successfully.');
+  };
 
   const handleVerify = async () => {
     if (actionsDisabled || verifyState.status === 'loading') return;
@@ -398,6 +497,9 @@ export default function RepaymentSchedule() {
       if (!preview.valid) throw new Error(preview.error);
 
       const changed = JSON.stringify(comparableSchedule(saved.value)) !== JSON.stringify(comparableSchedule(preview.value));
+      if (changed) {
+        setKfsState((current) => ({ ...current, verificationInvalidated: true }));
+      }
       setVerifyState({
         status: 'ready',
         message: changed ? 'Changes detected. Click Build to regenerate.' : 'Repayment schedule is up to date.',
@@ -412,6 +514,7 @@ export default function RepaymentSchedule() {
     if (actionsDisabled || buildState.status === 'loading') return;
     const requestId = requestSequenceRef.current;
     let generated = false;
+    setKfsState((current) => ({ ...current, verificationInvalidated: true }));
     setBuildState({ status: 'loading', message: '' });
     try {
       if (!requestPayload.agentCustomerId || !requestPayload.applicationProductDetailsId || !requestPayload.createdBy) {
@@ -443,6 +546,7 @@ export default function RepaymentSchedule() {
 
       setSavedState({ status: 'ready', schedule: refreshed.value.schedule, details: refreshed.value.details, error: '' });
       setVerifyState({ status: 'idle', message: '' });
+      setKfsState((current) => ({ ...current, verificationInvalidated: false }));
       setBuildState({ status: 'ready', message: 'Repayment schedule generated and refreshed successfully.' });
       toast.success('Repayment schedule generated successfully.');
     } catch (error) {
@@ -516,8 +620,36 @@ export default function RepaymentSchedule() {
               <button type="button" className="operations-repayment-button operations-repayment-button--primary" onClick={handleBuild} disabled={actionsDisabled || buildState.status === 'loading'}>
                 {buildState.status === 'loading' ? 'Building…' : 'Build'}
               </button>
+              <button
+                type="button"
+                className="operations-repayment-button operations-repayment-button--secondary operations-repayment-button--kfs"
+                onClick={handleOpenKfs}
+                disabled={!canGenerateKfs}
+                title={!canGenerateKfs ? 'A final approved decision, assigned Maker, saved schedule and saved fees are required.' : 'Verify and generate the KFS from saved backend data'}
+              >
+                <FileCheck size={15} aria-hidden="true" /> Verify &amp; Generate KFS
+              </button>
+              <button
+                type="button"
+                className="operations-repayment-button operations-repayment-button--secondary operations-repayment-button--kfs"
+                onClick={() => setKfsViewerOpen(true)}
+                disabled={!kfsState.existingDocument}
+                title={!kfsState.existingDocument ? 'No saved KFS is available.' : 'View the saved KFS PDF'}
+              >
+                <Eye size={15} aria-hidden="true" /> View KFS
+              </button>
             </div>
           </div>
+          {kfsState.error && <p className="operations-repayment-kfs-status operations-repayment-kfs-status--error" role="alert">{kfsState.error}</p>}
+          {savedState.status === 'ready' && kfsData.validationError && (
+            <p className="operations-repayment-kfs-status operations-repayment-kfs-status--error" role="alert">{kfsData.validationError}</p>
+          )}
+          {kfsState.existingDocument && !kfsState.verificationInvalidated && (
+            <p className="operations-repayment-kfs-status" role="status">Saved KFS available. Freshness against backend schedule and fees is not versioned.</p>
+          )}
+          {kfsState.verificationInvalidated && (
+            <p className="operations-repayment-kfs-status operations-repayment-kfs-status--warning" role="status">The repayment schedule changed or has an unconfirmed preview. Verify and regenerate the KFS before using it.</p>
+          )}
           <div className="operations-repayment-summary-grid">
             {SUMMARY_FIELDS.map(([label, field, type]) => <SummaryField key={field} label={label} value={readValue(schedule, field, field[0].toUpperCase() + field.slice(1))} type={type} />)}
           </div>
@@ -575,6 +707,38 @@ export default function RepaymentSchedule() {
             </table>
           </div>
         </section>
+
+        {kfsModalOpen && (
+          <div className="operations-repayment-kfs-modal" role="dialog" aria-modal="true" aria-labelledby="operations-repayment-kfs-title">
+            <div className="operations-repayment-kfs-modal__window">
+              <header className="operations-repayment-kfs-modal__header">
+                <div>
+                  <h2 id="operations-repayment-kfs-title">Verify &amp; Generate KFS</h2>
+                  <p>Financial values are read-only and sourced from the saved repayment schedule and Operations Fees.</p>
+                </div>
+                <button type="button" onClick={() => setKfsModalOpen(false)} aria-label="Close KFS verification modal">Close</button>
+              </header>
+              <div className="operations-repayment-kfs-modal__body">
+                <KfsReport
+                  verificationData={application}
+                  applicationProductDetailsId={requestPayload.applicationProductDetailsId}
+                  agentCustomerId={requestPayload.agentCustomerId}
+                  creditDecision={kfsState.decision}
+                  operationsData={kfsData}
+                  onPdfPersisted={handleKfsPersisted}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {kfsViewerOpen && (
+          <OperationsDocumentViewer
+            application={{ ...application, applicationProductDetailsId: requestPayload.applicationProductDetailsId }}
+            type="kfs"
+            onClose={() => setKfsViewerOpen(false)}
+          />
+        )}
 
         <footer className="operations-repayment-footer">
           <button type="button" className="operations-repayment-button operations-repayment-button--secondary" onClick={() => navigate(buildApplicationRoute(ROUTES.MAKER_FEES, applicationId))}>

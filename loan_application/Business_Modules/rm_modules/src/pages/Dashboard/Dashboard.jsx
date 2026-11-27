@@ -166,8 +166,7 @@ export default function Dashboard() {
       label: 'STATUS',
       render: (row) => (
         <StatusBadge
-          status={row.status}
-          label={row.status === 'Approved' ? 'Logged to HO' : undefined}
+          workflowStatus={row.workflowStatus}
         />
       ),
     },

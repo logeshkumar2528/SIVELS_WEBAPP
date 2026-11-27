@@ -32,44 +32,64 @@ function formatCurrency(amount) {
   }).format(num);
 }
 
-function getStatusInfo(status) {
+const STATUS_UNAVAILABLE_FILTER = '__STATUS_UNAVAILABLE__';
+const SUBMITTED_WORKFLOW_CODES = new Set([
+  'CM_APPROVAL_PENDING',
+  'CM_REVIEW_IN_PROGRESS',
+  'CH_APPROVAL_PENDING',
+  'CH_REVIEW_IN_PROGRESS',
+  'CREDIT_APPROVED_MAKER_PENDING',
+  'MAKER_VERIFICATION_IN_PROGRESS',
+]);
+
+function getStatusInfo(status, workflowStatusCode, workflowStatusName) {
+  const workflowCode = String(workflowStatusCode || '').trim().toUpperCase();
+  if (workflowCode) {
+    const className = workflowCode.includes('REJECTED') || workflowCode.includes('RETURNED')
+      ? 'stc-pill--pending'
+      : workflowCode.includes('APPROVED')
+        ? 'stc-pill--verified'
+        : 'stc-pill--progress';
+    return { label: workflowStatusName || 'Status unavailable', className };
+  }
+
   if (status === null || status === undefined) {
-    return { label: 'RM Pending', className: 'stc-pill--pending' };
+    return { label: 'Status unavailable', className: 'stc-pill--pending' };
   }
   if (typeof status === 'number') {
     switch (status) {
       case 2:
-        return { label: 'Logged to HO', className: 'stc-pill--progress' };
+        return { label: 'Status unavailable', className: 'stc-pill--progress' };
       case 3:
-        return { label: 'CM Pending', className: 'stc-pill--progress' };
+        return { label: 'Status unavailable', className: 'stc-pill--progress' };
       case 4:
-        return { label: 'Approved', className: 'stc-pill--verified' };
+        return { label: 'Status unavailable', className: 'stc-pill--verified' };
       case 5:
-        return { label: 'Rejected', className: 'stc-pill--pending' };
+        return { label: 'Status unavailable', className: 'stc-pill--pending' };
       case 6:
-        return { label: 'Returned', className: 'stc-pill--pending' };
+        return { label: 'Status unavailable', className: 'stc-pill--pending' };
       case 1:
-        return { label: 'RM Pending', className: 'stc-pill--pending' };
+        return { label: 'Status unavailable', className: 'stc-pill--pending' };
       case 0:
-        return { label: 'New', className: 'stc-pill--pending' };
+        return { label: 'Status unavailable', className: 'stc-pill--pending' };
       default:
-        return { label: 'RM Pending', className: 'stc-pill--pending' };
+        return { label: 'Status unavailable', className: 'stc-pill--pending' };
     }
   }
   const s = String(status).toLowerCase().trim();
-  if (s === '2' || s.includes('logged to ho') || s.includes('received')) return { label: 'Logged to HO', className: 'stc-pill--progress' };
-  if (s === '3' || s.includes('cm pending') || s.includes('review') || s.includes('verification')) return { label: 'CM Pending', className: 'stc-pill--progress' };
-  if (s === '4' || s.includes('approved')) return { label: 'Approved', className: 'stc-pill--verified' };
-  if (s === '5' || s.includes('reject')) return { label: 'Rejected', className: 'stc-pill--pending' };
-  if (s === '6' || s.includes('bo returned') || s.includes('return')) return { label: 'Returned', className: 'stc-pill--pending' };
-  if (s === '1' || s.includes('rm pending') || s.includes('pending') || s.includes('sourced')) return { label: 'RM Pending', className: 'stc-pill--pending' };
-  if (s === '0' || s.includes('draft') || s.includes('new')) return { label: 'New', className: 'stc-pill--pending' };
-  return { label: String(status), className: 'stc-pill--pending' };
+  if (s === '2' || s.includes('logged to ho') || s.includes('received')) return { label: 'Status unavailable', className: 'stc-pill--progress' };
+  if (s === '3' || s.includes('cm pending') || s.includes('review') || s.includes('verification')) return { label: 'Status unavailable', className: 'stc-pill--progress' };
+  if (s === '4' || s.includes('approved')) return { label: 'Status unavailable', className: 'stc-pill--verified' };
+  if (s === '5' || s.includes('reject')) return { label: 'Status unavailable', className: 'stc-pill--pending' };
+  if (s === '6' || s.includes('bo returned') || s.includes('return')) return { label: 'Status unavailable', className: 'stc-pill--pending' };
+  if (s === '1' || s.includes('rm pending') || s.includes('pending') || s.includes('sourced')) return { label: 'Status unavailable', className: 'stc-pill--pending' };
+  if (s === '0' || s.includes('draft') || s.includes('new')) return { label: 'Status unavailable', className: 'stc-pill--pending' };
+  return { label: 'Status unavailable', className: 'stc-pill--pending' };
 }
 
 export default function SubmitToCredit() {
   const navigate = useNavigate();
-  const { customers, loading, error, refetch } = useCustomerQueue();
+  const { customers, allCustomers, loading, error, refetch } = useCustomerQueue();
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -97,22 +117,50 @@ export default function SubmitToCredit() {
     return customers.filter((c) => Boolean(c.isCreditReady || c.isUnderwritingReady));
   }, [customers]);
 
-  // Dynamic filter options derived from live verified applications
+  const submittedCustomers = useMemo(() => (
+    allCustomers.filter((customer) => SUBMITTED_WORKFLOW_CODES.has(customer.workflowStatusCode))
+  ), [allCustomers]);
+
+  const tableCustomers = useMemo(() => {
+    const customersById = new Map();
+    const queueCustomers = [
+      ...readyCustomers.map((customer) => ({ ...customer, isReadyForSubmission: true })),
+      ...submittedCustomers.map((customer) => ({ ...customer, isReadyForSubmission: false })),
+    ];
+
+    queueCustomers.forEach((customer) => {
+      const customerId = customer.agentCustomerId || customer.id;
+      if (customerId != null && !customersById.has(String(customerId))) {
+        customersById.set(String(customerId), customer);
+      }
+    });
+
+    return [...customersById.values()];
+  }, [readyCustomers, submittedCustomers]);
+
+  // Dynamic filter options derived from the combined application queue
   const districtOptions = useMemo(() => {
-    return [...new Set(readyCustomers.map((c) => c.districtName).filter(Boolean))].sort();
-  }, [readyCustomers]);
+    return [...new Set(tableCustomers.map((c) => c.districtName).filter(Boolean))].sort();
+  }, [tableCustomers]);
 
   const rmOptions = useMemo(() => {
-    return [...new Set(readyCustomers.map((c) => c.rmName).filter(Boolean))].sort();
-  }, [readyCustomers]);
+    return [...new Set(tableCustomers.map((c) => c.rmName).filter(Boolean))].sort();
+  }, [tableCustomers]);
 
   const agentOptions = useMemo(() => {
-    return [...new Set(readyCustomers.map((c) => c.agentName).filter(Boolean))].sort();
-  }, [readyCustomers]);
+    return [...new Set(tableCustomers.map((c) => c.agentName).filter(Boolean))].sort();
+  }, [tableCustomers]);
 
   const statusOptions = useMemo(() => {
-    return [...new Set(readyCustomers.map((c) => getStatusInfo(c.status).label).filter(Boolean))].sort();
-  }, [readyCustomers]);
+    const options = new Map();
+    tableCustomers.forEach((customer) => {
+      const value = customer.workflowStatusCode || STATUS_UNAVAILABLE_FILTER;
+      options.set(value, getStatusInfo(customer.status, customer.workflowStatusCode, customer.workflowStatusName).label);
+    });
+    return [...options.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [tableCustomers]);
 
   // Reset page on filter change
   useEffect(() => {
@@ -124,7 +172,7 @@ export default function SubmitToCredit() {
     const term = searchTerm.trim().toLowerCase();
     const searchActive = term.length > 0;
 
-    return readyCustomers
+    return tableCustomers
       .filter((c) => {
         const appDate = c.createdAt || c.appliedDate;
         const matchesDate = matchesListingDateCriteria({
@@ -138,7 +186,11 @@ export default function SubmitToCredit() {
         const matchDistrict = districtFilter === 'All' || (c.districtName && c.districtName.toLowerCase() === districtFilter.toLowerCase());
         const matchRM = rmFilter === 'All' || (c.rmName && c.rmName.toLowerCase() === rmFilter.toLowerCase());
         const matchAgent = agentFilter === 'All' || (c.agentName && c.agentName.toLowerCase() === agentFilter.toLowerCase());
-        const matchStatus = statusFilter === 'All' || getStatusInfo(c.status).label.toLowerCase() === statusFilter.toLowerCase();
+        const matchStatus = statusFilter === 'All' || (
+          c.workflowStatusCode
+            ? c.workflowStatusCode === statusFilter
+            : statusFilter === STATUS_UNAVAILABLE_FILTER
+        );
 
         if (!matchDistrict || !matchRM || !matchAgent || !matchStatus) return false;
 
@@ -146,12 +198,14 @@ export default function SubmitToCredit() {
 
         const custName = String(c.customerName || c.fullName || '').toLowerCase();
         const mobile = String(c.mobile || c.mobileNumber || '');
-        const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
+        const customerCode = String(c.customerCode || '').toLowerCase();
+        const appId = String(c.appId || '').toLowerCase();
 
         const matchSearch =
           custName.includes(term) ||
           mobile.includes(term) ||
-          appNo.includes(term);
+          customerCode.includes(term) ||
+          appId.includes(term);
 
         return matchSearch;
       })
@@ -163,7 +217,7 @@ export default function SubmitToCredit() {
         const idB = Number(b.agentCustomerId ?? b.id ?? 0) || 0;
         return idB - idA;
       });
-  }, [readyCustomers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm, fromDate, toDate]);
+  }, [tableCustomers, districtFilter, rmFilter, agentFilter, statusFilter, searchTerm, fromDate, toDate]);
 
   // Pagination Slice
   const paginatedCustomers = useMemo(() => {
@@ -175,6 +229,14 @@ export default function SubmitToCredit() {
     const targetId = customer.agentCustomerId || customer.id;
     if (targetId) {
       navigate(buildRoute.submitToCreditDetail(targetId));
+    }
+  };
+
+  const handleViewClick = (customer) => {
+    const targetId = customer.agentCustomerId || customer.id;
+    if (targetId) {
+      const readOnlyRoute = `${buildRoute.customerVerification(targetId)}?mode=view&step=1`;
+      navigate(readOnlyRoute, { state: { returnTo: readOnlyRoute } });
     }
   };
 
@@ -197,7 +259,7 @@ export default function SubmitToCredit() {
           </div>
 
           <div className="stc-count-badge">
-            Showing <strong>{filteredCustomers.length}</strong> of {readyCustomers.length} Verified Applications
+            Showing <strong>{filteredCustomers.length}</strong> of {tableCustomers.length} Applications
           </div>
         </div>
 
@@ -254,7 +316,7 @@ export default function SubmitToCredit() {
             >
               <option value="All">All Statuses</option>
               {statusOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
           </div>
@@ -346,7 +408,7 @@ export default function SubmitToCredit() {
                 <thead>
                   <tr>
                     <th>S.No</th>
-                    <th>Application No &amp; Date</th>
+                    <th>Customer Code &amp; Date</th>
                     <th>Customer Name</th>
                     <th>Loan Product</th>
                     <th>Amount</th>
@@ -359,15 +421,15 @@ export default function SubmitToCredit() {
                   {paginatedCustomers.map((c, index) => {
                     const custId = c.agentCustomerId || c.id;
                     const custName = c.customerName || c.fullName || 'Customer';
-                    const appNo = c.appId || (c.applicationNo && c.applicationNo !== 'N/A' && !c.applicationNo.startsWith('APP-') ? c.applicationNo : 'N/A');
+                    const customerCode = c.customerCode || 'N/A';
                     const appliedDate = c.createdAt || c.appliedDate;
-                    const statusInfo = getStatusInfo(c.status);
+                    const statusInfo = getStatusInfo(c.status, c.workflowStatusCode, c.workflowStatusName);
 
                     return (
                       <tr key={custId}>
                         <td>{(currentPage - 1) * pageSize + index + 1}</td>
                         <td>
-                          <strong>{appNo}</strong>
+                          <strong>{customerCode}</strong>
                           <div className="stc-customer-sub">
                             {appliedDate ? String(appliedDate).slice(0, 10) : '—'}
                           </div>
@@ -378,7 +440,7 @@ export default function SubmitToCredit() {
                             <span className="stc-customer-sub">{c.mobile || c.mobileNumber || ''}</span>
                           </div>
                         </td>
-                        <td>{c.loanType || c.loanProduct || 'Personal Loan'}</td>
+                        <td>{c.loanProductName || 'N/A'}</td>
                         <td>
                           <span className="stc-amount-cell">
                             {formatCurrency(c.expectedLoanAmount || c.loanAmount || c.amount)}
@@ -394,15 +456,26 @@ export default function SubmitToCredit() {
                           </span>
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className="stc-btn-review"
-                            onClick={() => handleReviewClick(c)}
-                            aria-label={`Review and submit application ${appNo}`}
-                          >
-                            <span>Review &amp; Submit</span>
-                            {ArrowRightIcon && <ArrowRightIcon size={14} />}
-                          </button>
+                          {!c.isReadyForSubmission ? (
+                            <button
+                              type="button"
+                              className="stc-btn-view"
+                              onClick={() => handleViewClick(c)}
+                              aria-label={`View application ${customerCode}`}
+                            >
+                              <span>View</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="stc-btn-review"
+                              onClick={() => handleReviewClick(c)}
+                              aria-label={`Review and submit application ${customerCode}`}
+                            >
+                              <span>Review &amp; Submit</span>
+                              {ArrowRightIcon && <ArrowRightIcon size={14} />}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -426,7 +499,7 @@ export default function SubmitToCredit() {
                 pageSize={pageSize}
                 onPageChange={setCurrentPage}
                 onPageSizeChange={setPageSize}
-                pageSizeOptions={[5, 10, 20, 50]}
+                pageSizeOptions={[6, 10, 20, 50]}
               />
             )}
           </>

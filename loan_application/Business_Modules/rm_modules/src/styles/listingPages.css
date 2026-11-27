@@ -276,7 +276,7 @@
 .rm-new-applications-table .data-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 0;
+  min-width: 1180px !important;
   border-collapse: separate;
   border-spacing: 0;
   flex: none;
@@ -284,7 +284,7 @@
 }
 
 .rm-new-applications-table .data-table-scroll {
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: visible;
   flex: none;
 }
@@ -364,7 +364,8 @@
 
 .rm-new-applications-table .data-table-th:nth-child(8),
 .rm-new-applications-table .data-table-cell:nth-child(8) {
-  width: 7.5% !important;
+  width: 10% !important;
+  min-width: 105px !important;
   font-size: 11px;
   color: #64748b;
   white-space: nowrap;
@@ -372,14 +373,29 @@
 
 .rm-new-applications-table .data-table-th:nth-child(9),
 .rm-new-applications-table .data-table-cell:nth-child(9) {
-  width: 11% !important;
+  width: 18% !important;
+  min-width: 220px !important;
   text-align: center;
+  white-space: normal !important;
 }
 
 .rm-new-applications-table .data-table-th:nth-child(10),
 .rm-new-applications-table .data-table-cell:nth-child(10) {
-  width: 11.5% !important;
+  width: 12% !important;
+  min-width: 135px !important;
   text-align: center;
+}
+
+/* Keep full workflow labels within the date/status/action area. */
+.rm-new-applications-table .status-badge {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
+.rm-new-applications-table .status-badge-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .new-apps-status-cell {

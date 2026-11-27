@@ -13,6 +13,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus'
 import { masterService } from '../../../../../../Core/src/services/masterService'
 import { resolveDocumentTypeId } from '../../../../../../Core/src/utils/documentTypeHelper'
 import './ViewCustomerModal.css'
@@ -270,7 +271,8 @@ function ViewCustomerModal({ customer, onClose, profileImageUrl, onProfileImageE
   }
   
   const submittedOn = formatDate(customer.createdAt)
-  const status = customer.status || 'Draft'
+  const workflowStatus = customer.workflowStatus || extractWorkflowStatus(customer)
+  const status = workflowStatus.workflowStatusName || 'Status unavailable'
   
   // Resolve Names
   const rawProdId = customer.loanProductId ?? customer.LoanProductId ?? customer.loanProduct;

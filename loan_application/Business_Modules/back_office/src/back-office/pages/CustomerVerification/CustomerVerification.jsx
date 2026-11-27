@@ -32,7 +32,7 @@ import { needsAuthedFetch } from '../../../../../../Core/src/auth/useAuthedObjec
 import { hasPermission } from '../../../../../../Core/src/auth/permissions';
 import { getStoredRoleCode } from '../../../../../../Core/src/auth/session';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import iconMap from '../../config/iconMap';
 import { ROUTES } from '../../config/routeConfig';
 import { useVerificationWorkspace } from '../../hooks/useVerificationWorkspace';
@@ -60,6 +60,8 @@ import { ApplicationDraftProvider } from '../../../../../rm_modules/src/state/Ap
 import { resolveDocumentTypeId, getDocumentApplicability } from '../../../../../../Core/src/utils/documentTypeHelper';
 import { EMPTY_READINESS, describeFailedChecks, summarizeReadiness } from '../../utils/readinessHelper';
 import { buildNormalIncomeSummary } from '../../utils/normalIncomeSheetParser';
+import { extractApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus';
 import './CustomerVerification.css';
 
 const API_BASE = API_BASE_URL;
@@ -375,6 +377,9 @@ export const resolveReviewSectionId = (internalStep) =>
 /** Buttons that change data; blocked for the Credit Manager until the section is in Edit mode. */
 const CM_EDIT_ACTION_PATTERN =
   /\b(save|saving|verify|delete|remove|upload|replace|override|use application|use policy|use calculated|add|submit|update|calculate|recalculate|apply|mark|clear|reset|browse)\b/i;
+
+const READ_ONLY_MUTATION_ACTION_PATTERN =
+  /\b(save|saving|verify|delete|remove|upload|replace|override|use application|use policy|use calculated|add|submit|update|calculate|recalculate|apply|mark|clear|reset|browse|edit|start|return|send|approve|reject|forward|resolve|accept|confirm|fetch|re-fetch)\b/i;
 
 /**
  * Visible Step (1–13) to Internal Step ID Mapping
@@ -1356,7 +1361,20 @@ export default function CustomerVerification({
   const isCreditManagerView = viewerRole === 'CreditManager';
   const { customerId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isReadOnlyView = searchParams.get('mode') === 'view';
+  const readOnlyReturnTo = customerId
+    ? `${ROUTES.CUSTOMER_VERIFICATION.replace(':customerId', customerId)}?mode=view&step=${searchParams.get('step') || '1'}`
+    : null;
+
+  useEffect(() => {
+    if (!isReadOnlyView || !readOnlyReturnTo || location.state?.returnTo === readOnlyReturnTo) return;
+    navigate(readOnlyReturnTo, {
+      replace: true,
+      state: { returnTo: readOnlyReturnTo },
+    });
+  }, [isReadOnlyView, readOnlyReturnTo, location.state?.returnTo, navigate]);
 
   // 1. Fetch Real Application from Backend via Phase 1/3 Hook
   const { verificationData, loading, error, refetch } = useVerificationWorkspace(customerId);
@@ -2479,12 +2497,13 @@ export default function CustomerVerification({
   const [finalAssessmentSaving, setFinalAssessmentSaving] = useState(false);
   const [finalAssessmentSaveStatus, setFinalAssessmentSaveStatus] = useState(null);
   const [finalAssessmentErrorMessage, setFinalAssessmentErrorMessage] = useState(null);
-  const [isForwardedToCreditManager, setIsForwardedToCreditManager] = useState(false);
-
   // ── Centralized Application Status & Role Permissions ──────────────────────
   const currentRoleCode = (getStoredRoleCode() || '').toUpperCase();
   const rawAppStatus = Number(verificationData?.overallStatus);
-  const appStatus = isForwardedToCreditManager ? 3 : rawAppStatus;
+  const appStatus = rawAppStatus;
+  const workflowStatusCode = verificationData?.workflowStatusCode || verificationData?.workflowStatus?.workflowStatusCode || null;
+  const workflowStatusName = verificationData?.workflowStatusName || verificationData?.workflowStatus?.workflowStatusName || null;
+  const workflowReason = verificationData?.workflowReason || verificationData?.workflowStatus?.reason || null;
   const isBackOffice =
     !isCreditManagerView &&
     currentRoleCode === 'BACK_OFFICE';
@@ -2496,7 +2515,7 @@ export default function CustomerVerification({
     appStatus === 4 ||
     appStatus === 5 ||
     appStatus === 6;
-  const isBackOfficeEditable = isBackOffice && appStatus === 2;
+  const isBackOfficeEditable = !isReadOnlyView && isBackOffice && appStatus === 2;
   const activeFinalAssessmentContextRef = useRef('');
   const [lipCurrentRecord, setLipCurrentRecord] = useState(null);
   const [bankingEligibilityRecord, setBankingEligibilityRecord] = useState(null);
@@ -2812,11 +2831,6 @@ export default function CustomerVerification({
       0
     );
   }, [verificationData]);
-
-  // Reset forwarded state on application / calculation context change
-  useEffect(() => {
-    setIsForwardedToCreditManager(false);
-  }, [calculationAppProdId, customerId]);
 
   // Feature A: Hydrate saved final assessment selection from backend
   useEffect(() => {
@@ -5963,6 +5977,7 @@ export default function CustomerVerification({
   const [isFetchingWorkflowHistory, setIsFetchingWorkflowHistory] = useState(false);
   const [workflowHistoryError, setWorkflowHistoryError] = useState(null);
   const [workflowActorDirectory, setWorkflowActorDirectory] = useState({});
+  const [isStartingBackOfficeVerification, setIsStartingBackOfficeVerification] = useState(false);
 
   useEffect(() => {
     const actors = workflowHistory
@@ -7309,7 +7324,7 @@ export default function CustomerVerification({
                           className={`bo-cv-health-findings-trigger ${hasFindings ? 'has-value' : ''}`}
                           onClick={() => openFindingsModal(typeId, label, row.findings, step)}
                           aria-label={`${label} findings or status`}
-                          disabled={isSavingHealthChecks}
+                          disabled={isSavingHealthChecks || !isSectionEditable}
                         >
                           <span className="bo-cv-health-findings-trigger-text">
                             {hasFindings ? row.findings : 'Click to add findings…'}
@@ -7868,6 +7883,60 @@ export default function CustomerVerification({
     }
   }, [activeStep, fetchWorkflowHistory, evaluateStep13Readiness]);
 
+  const handleStartBackOfficeVerification = async () => {
+    if (isStartingBackOfficeVerification || !resolvedTargetCustomerId || !isBackOffice) return;
+    if (workflowStatusCode === 'BO_VERIFICATION_IN_PROGRESS') return;
+    if (!['BO_VERIFICATION_PENDING', 'RETURNED_TO_BO_CORRECTION_PENDING'].includes(workflowStatusCode)) {
+      setWorkflowActionFeedback({
+        type: 'error',
+        message: 'The backend has not placed this application in the Back Office verification queue.',
+      });
+      return;
+    }
+
+    const backOfficeId = getAuthenticatedBackOfficeId();
+    if (!backOfficeId) {
+      setWorkflowActionFeedback({
+        type: 'error',
+        message: 'Unable to identify the authenticated Back Office operator. Please login again.',
+      });
+      return;
+    }
+
+    setIsStartingBackOfficeVerification(true);
+    setWorkflowActionFeedback(null);
+    try {
+      const response = await backOfficeService.startBackOfficeVerification(resolvedTargetCustomerId, {
+        performedByUserId: backOfficeId,
+        performedByRole: 'BackOffice',
+        remarks: null,
+      });
+      const transitionStatus = extractWorkflowStatus(response);
+      let refreshedRecord = null;
+      try {
+        refreshedRecord = await refetch();
+      } catch (refreshError) {
+        console.warn('[CustomerVerification] Back Office verification refresh failed:', refreshError);
+      }
+      const refreshedStatus = extractWorkflowStatus(refreshedRecord);
+      const confirmedStatus = transitionStatus.hasDetailedWorkflowStatus ? transitionStatus : refreshedStatus;
+      if (confirmedStatus.workflowStatusCode !== 'BO_VERIFICATION_IN_PROGRESS') {
+        throw new Error('The server did not confirm Back Office Verification In Progress. Please refresh and retry.');
+      }
+      setWorkflowActionFeedback({
+        type: 'success',
+        message: confirmedStatus.workflowStatusName || 'Back Office verification started successfully.',
+      });
+    } catch (err) {
+      setWorkflowActionFeedback({
+        type: 'error',
+        message: extractApiErrorMessage(err, 'Unable to start Back Office verification.'),
+      });
+    } finally {
+      setIsStartingBackOfficeVerification(false);
+    }
+  };
+
   const handleOpenReturnToRmModal = () => {
     if (isBackOffice && !isBackOfficeEditable) return;
     setReturnToRmModal({
@@ -7925,18 +7994,30 @@ export default function CustomerVerification({
         remarks: trimmed,
         applicantSequence: resolvedApplicantSequence,
       };
-      await backOfficeService.returnApplicationToRM(custId, payload);
+      const transitionResponse = await backOfficeService.returnApplicationToRM(custId, payload);
+      const transitionStatus = extractWorkflowStatus(transitionResponse);
+      let refreshedRecord = null;
+      try {
+        refreshedRecord = await refetch();
+      } catch (refreshError) {
+        console.warn('[CustomerVerification] Return-to-RM refresh failed:', refreshError);
+      }
+      const refreshedStatus = extractWorkflowStatus(refreshedRecord);
+      const confirmedStatus = transitionStatus.hasDetailedWorkflowStatus ? transitionStatus : refreshedStatus;
+      if (confirmedStatus.workflowStatusCode !== 'RETURNED_TO_RM_CORRECTION_PENDING') {
+        throw new Error('The server returned an unexpected workflow status for this application.');
+      }
 
       setReturnToRmModal({ open: false, remarks: '', error: null, isSubmitting: false, applicantSequence: null });
       setWorkflowActionFeedback({
         type: 'success',
-        message: `Application #${custId} has been successfully returned to the Relationship Manager. Status transitioned from Logged to HO (2) to Returned to RM (6).`,
+        message: confirmedStatus.workflowStatusName || 'Application returned to the Relationship Manager for correction.',
       });
 
       await fetchWorkflowHistory();
     } catch (err) {
       console.error('[CustomerVerification] Failed to return application to RM:', err);
-      const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to return application to RM.';
+      const msg = extractApiErrorMessage(err, 'Failed to return application to RM.');
       setReturnToRmModal((prev) => ({ ...prev, isSubmitting: false, error: msg }));
     }
   };
@@ -8002,15 +8083,26 @@ export default function CustomerVerification({
         performedByRole: 'BackOffice',
         remarks: trimmed,
       };
-      await backOfficeService.sendApplicationToCreditManager(custId, payload);
-      setIsForwardedToCreditManager(true);
+      const transitionResponse = await backOfficeService.sendApplicationToCreditManager(custId, payload);
+      const transitionStatus = extractWorkflowStatus(transitionResponse);
+      let refreshedRecord = null;
+      try {
+        refreshedRecord = await refetch();
+      } catch (refreshError) {
+        console.warn('[CustomerVerification] Send-to-credit refresh failed:', refreshError);
+      }
+      const refreshedStatus = extractWorkflowStatus(refreshedRecord);
+      const confirmedStatus = transitionStatus.hasDetailedWorkflowStatus ? transitionStatus : refreshedStatus;
+      if (confirmedStatus.workflowStatusCode !== 'CM_APPROVAL_PENDING') {
+        throw new Error('The server returned an unexpected workflow status for this application.');
+      }
 
       setSendToCreditModal({ open: false, remarks: '', error: null, isSubmitting: false });
       setWorkflowActionFeedback({
         type: 'success',
-        message: isResubmission
-          ? `Application #${custId} has been resubmitted to the Credit Manager with your resolutions. Status: Resubmitted to Credit Manager (2 → 3).`
-          : `Application #${custId} has been successfully submitted to Credit Manager. Status transitioned from Logged to HO (2) to Sent to Credit Manager (3: Under Review).`,
+        message: confirmedStatus.workflowStatusName || (isResubmission
+          ? 'Application resubmitted to the Credit Manager.'
+          : 'Application submitted to the Credit Manager.'),
       });
 
       await Promise.all([
@@ -8022,7 +8114,7 @@ export default function CustomerVerification({
       ]);
     } catch (err) {
       console.error('[CustomerVerification] Failed to send application to Credit Manager:', err);
-      const msg = err?.response?.data?.message || err?.response?.data?.title || err?.message || 'Failed to send application to Credit Manager.';
+      const msg = extractApiErrorMessage(err, 'Failed to send application to Credit Manager.');
       setSendToCreditModal((prev) => ({ ...prev, isSubmitting: false, error: msg }));
       if (Array.isArray(err?.response?.data?.failedChecks)) {
         evaluateStep13Readiness();
@@ -10074,6 +10166,43 @@ export default function CustomerVerification({
     showCmLockNotice();
   };
 
+  const isReadOnlyMutationTarget = (target) => {
+    if (!(target instanceof Element)) return false;
+
+    const field = target.closest('input, select, textarea');
+    if (field) return field.id !== 'bo-cv-unified-step-select';
+
+    const label = target.closest('label');
+    if (label?.htmlFor === 'bo-cv-unified-step-select') return false;
+    if (label?.htmlFor && document.getElementById(label.htmlFor)?.matches('input, select, textarea')) return true;
+
+    const control = target.closest('button, [role="button"]');
+    if (!control) return false;
+
+    const text = `${control.textContent || ''} ${control.getAttribute('aria-label') || ''} ${control.title || ''}`;
+    return READ_ONLY_MUTATION_ACTION_PATTERN.test(text);
+  };
+
+  const blockReadOnlyInteraction = (event) => {
+    if (!isReadOnlyView || !isReadOnlyMutationTarget(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const readOnlyLockHandlers = isReadOnlyView
+    ? {
+        onClickCapture: blockReadOnlyInteraction,
+        onChangeCapture: blockReadOnlyInteraction,
+        onInputCapture: blockReadOnlyInteraction,
+        onKeyDownCapture: (event) => {
+          if (event.key !== 'Tab') blockReadOnlyInteraction(event);
+        },
+        onSubmitCapture: blockReadOnlyInteraction,
+        onPasteCapture: blockReadOnlyInteraction,
+        onDropCapture: blockReadOnlyInteraction,
+      }
+    : {};
+
   const cmLockHandlers = isCmSectionLocked
     ? {
         onMouseDownCapture: blockCmLockedInteraction,
@@ -10107,9 +10236,9 @@ export default function CustomerVerification({
   const activeReturnItems = creditReturnItemsByStep[activeReturnStepId] || [];
   const activeReturnStepTitle =
     VERIFICATION_WORKFLOW_STEPS.find((step) => step.id === activeReturnStepId)?.title || 'Section';
-  const canActOnCreditReturns = isCreditManagerView
+  const canActOnCreditReturns = !isReadOnlyView && (isCreditManagerView
     ? !!creditReturn?.canAct
-    : Number(verificationData?.overallStatus) === 2;
+    : Number(verificationData?.overallStatus) === 2);
   const creditReturnLockedReason = isCreditManagerView
     ? 'This application is not pending with you, so resolutions cannot be accepted now.'
     : 'This application is not with the Back Office right now, so returned items cannot be resolved.';
@@ -12241,10 +12370,12 @@ export default function CustomerVerification({
 
   // Handlers
   const handleFetchCreditReport = () => {
+    if (isReadOnlyView) return;
     setBureauState('loading');
   };
 
   const handleRefreshReport = () => {
+    if (isReadOnlyView) return;
     setBureauState('loading');
   };
 
@@ -12323,6 +12454,7 @@ export default function CustomerVerification({
   const isWorkflowEditable = sectionReview ? Boolean(sectionReview.canEdit) : true;
 
   const isSectionEditable =
+    !isReadOnlyView &&
     !isApplicationClosed &&
     (
       isBackOfficeEditable ||
@@ -12541,6 +12673,7 @@ export default function CustomerVerification({
 
   const handleBack = () => {
     if (onBack) onBack();
+    else if (isReadOnlyView) navigate(ROUTES.SUBMIT_TO_CREDIT);
     else navigate(ROUTES.CUSTOMERS);
   };
 
@@ -12647,7 +12780,16 @@ export default function CustomerVerification({
 
   const appDetails = verificationData.applicationDetails || {};
   const panNumber = verificationData.personalInformation?.panNumber || 'Not Available';
-  const statusInfo = getStatusInfo(verificationData.overallStatus);
+  const statusInfo = workflowStatusName
+    ? {
+        label: workflowStatusName,
+        className: workflowStatusCode === 'APPLICATION_REJECTED'
+          ? 'bo-cv-pill-unverified'
+          : workflowStatusCode === 'CREDIT_APPROVED_MAKER_PENDING'
+            ? 'bo-cv-pill-verified'
+            : 'bo-cv-pill-fetching',
+      }
+    : { label: 'Status unavailable', className: 'bo-cv-pill-pending' };
 
   const visibleSidebarSteps = VERIFICATION_WORKFLOW_STEPS.filter(
     (step) => ![9, 10, 11, 12].includes(step.id) && (SHOW_CAM_STEP || step.id !== CAM_STEP_ID)
@@ -12765,7 +12907,9 @@ export default function CustomerVerification({
             {appStatus === 5 ? '✕' : appStatus === 4 ? '✓' : 'ℹ️'}
           </span>
           <span>
-            {appStatus === 3
+            {workflowStatusName
+              ? `${workflowStatusName}. Verification details are available in view-only mode.`
+              : appStatus === 3
               ? 'Application submitted to Credit Manager. Verification details are available in view-only mode.'
               : appStatus === 4
               ? 'Application has been approved. Verification details are available in view-only mode.'
@@ -12909,6 +13053,7 @@ export default function CustomerVerification({
           className={`bo-cv-main-content${isCmSectionLocked ? ' cm-section-locked' : ''}${showSectionReview && !isCmSectionLocked ? ' cm-section-editing' : ''}`}
           id="main-verification-content"
           {...cmLockHandlers}
+          {...readOnlyLockHandlers}
         >
           {cmLockNotice && (
             <div data-cm-section-bar className="bo-cv-feedback-alert is-info cm-lock-notice" role="status">
@@ -14538,6 +14683,10 @@ export default function CustomerVerification({
               </div>
 
               {/* Continuous 14-Field PD Sheet Form */}
+              <fieldset
+                disabled={!isSectionEditable}
+                style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+              >
               <section className="bo-cv-pd-sheet-body" aria-label="PD Sheet Details">
                 {recommendationSheets.map((sheet) => (
                   <div className="bo-cv-pd-fields-container" key={sheet.id}>
@@ -14784,6 +14933,7 @@ export default function CustomerVerification({
                   </div>
                 ))}
               </section>
+              </fieldset>
 
               {/* Bottom Action Area */}
               <div className="bo-cv-pd-footer">
@@ -19805,8 +19955,31 @@ export default function CustomerVerification({
                 </div>
               )}
 
+              {isBackOffice && !isReadOnlyView && ['BO_VERIFICATION_PENDING', 'RETURNED_TO_BO_CORRECTION_PENDING'].includes(workflowStatusCode) && (
+                <div className="bo-cv-action-feedback-banner bo-cv-action-feedback-banner--info" style={{ marginBottom: '20px' }}>
+                  <span>
+                    {workflowStatusName || 'Back Office verification is pending.'}
+                    {workflowReason ? ` Reason: ${workflowReason}` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className="bo-cv-btn-action bo-cv-btn-action--send-active"
+                    onClick={handleStartBackOfficeVerification}
+                    disabled={isStartingBackOfficeVerification}
+                  >
+                    {isStartingBackOfficeVerification ? 'Starting Verification...' : 'Start Back Office Verification'}
+                  </button>
+                </div>
+              )}
+
+              {isBackOffice && workflowStatusCode === 'BO_VERIFICATION_IN_PROGRESS' && (
+                <div className="bo-cv-action-feedback-banner bo-cv-action-feedback-banner--info" style={{ marginBottom: '20px' }}>
+                  <span>{workflowStatusName || 'Back Office Verification In Progress'}</span>
+                </div>
+              )}
+
               {/* Dual Action Cards (Credit Manager view renders its own decision panel instead) */}
-              {isCreditManagerView ? (
+              {!isReadOnlyView && (isCreditManagerView ? (
                 <div style={{ marginBottom: '20px' }}>{finalActionsSlot}</div>
               ) : !canApproveVerification ? (
                 <p className="bo-cv-action-card-desc" style={{ marginBottom: '20px' }}>
@@ -19926,7 +20099,7 @@ export default function CustomerVerification({
                   </button>
                 </div>
               </div>
-              )}
+              ))}
 
               {/* Workflow History Section */}
               <div className="bo-cv-history-card">

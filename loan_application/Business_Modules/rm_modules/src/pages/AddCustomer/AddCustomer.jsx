@@ -32,6 +32,8 @@ import {
   uploadAgentCustomerDocument,
 } from '../../../../../Core/src/services/customerDocumentService';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
+import { extractApiErrorMessage } from '../../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { ROUTES } from '../../config/routeConfig';
 import './AddCustomer.css';
@@ -73,6 +75,7 @@ export default function AddCustomer() {
   // Partial submission recovery state (to prevent duplicate customer on upload retry)
   const [createdRmCustomerId, setCreatedRmCustomerId] = useState(null);
   const [uploadedDocTypeIds, setUploadedDocTypeIds] = useState(new Set());
+  const [documentsReadyForSubmission, setDocumentsReadyForSubmission] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -446,6 +449,7 @@ export default function AddCustomer() {
 
   const handleFileChange = (e, documentTypeId, isMultiple = false) => {
     if (!e.target.files || e.target.files.length === 0) return;
+    setDocumentsReadyForSubmission(false);
 
     if (isMultiple) {
       const newFiles = Array.from(e.target.files);
@@ -469,6 +473,7 @@ export default function AddCustomer() {
   };
 
   const handleRemoveFile = (documentTypeId, index = null) => {
+    setDocumentsReadyForSubmission(false);
     setSelectedFiles((prev) => {
       const newFiles = { ...prev };
       if (index !== null && Array.isArray(newFiles[documentTypeId])) {
@@ -784,6 +789,7 @@ export default function AddCustomer() {
       }
 
       if (failedUploads.length > 0) {
+        setDocumentsReadyForSubmission(false);
         setGlobalBanner({
           type: 'warning',
           message: `Customer saved (ID: ${targetCustomerId}), but some document(s) failed: ${failedUploads.join(', ')}. Please retry upload.`,
@@ -793,9 +799,17 @@ export default function AddCustomer() {
         return;
       }
 
-      // Step 3: Success! Navigate to Submission History
+      // Step 3: Keep the created record available for an explicit RM submission.
       setSubmitting(false);
-      navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
+      if (isEditMode) {
+        navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
+      } else {
+        setDocumentsReadyForSubmission(true);
+        setGlobalBanner({
+          type: 'success',
+          message: `Customer application saved (ID: ${targetCustomerId}). Required documents are complete. Confirm submission to RM verification when ready.`,
+        });
+      }
     } catch (err) {
       console.error('Error in RM Add Customer submission:', err);
       const fieldMessages = Object.values(err?.response?.data?.errors || {}).flat().filter(Boolean);
@@ -811,6 +825,54 @@ export default function AddCustomer() {
       });
       setSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleSubmitToRm = async () => {
+    if (submitting || isEditMode || !createdRmCustomerId || !documentsReadyForSubmission) return;
+
+    setSubmitting(true);
+    setGlobalBanner(null);
+
+    try {
+      const transitionResponse = await rmCustomerService.updateCustomer(createdRmCustomerId, {
+        status: 1,
+      });
+
+      let confirmedRecord = transitionResponse;
+      try {
+        confirmedRecord = await rmCustomerService.getCustomerById(createdRmCustomerId);
+      } catch (refreshError) {
+        console.warn('RM submission succeeded but the latest customer detail could not be refreshed', refreshError);
+      }
+
+      const refreshedStatus = extractWorkflowStatus(confirmedRecord);
+      const transitionStatus = extractWorkflowStatus(transitionResponse);
+      const confirmedStatus = refreshedStatus.workflowStatusCode !== null || refreshedStatus.legacyStatus !== null
+        ? refreshedStatus
+        : transitionStatus;
+      const hasExplicitStatus = confirmedStatus.workflowStatusCode !== null || confirmedStatus.legacyStatus !== null;
+      const isRmPending =
+        confirmedStatus.workflowStatusCode === 'RM_VERIFICATION_PENDING' ||
+        confirmedStatus.legacyStatus === 1;
+
+      if (hasExplicitStatus && !isRmPending) {
+        throw new Error('The server did not confirm the RM Verification Pending status. Please retry.');
+      }
+
+      setGlobalBanner({
+        type: 'success',
+        message: 'Application submitted to RM verification. You can continue from Submission History.',
+      });
+      navigate(ROUTES.CUSTOMER_SUBMISSION_HISTORY);
+    } catch (err) {
+      console.error('Failed to submit RM-created customer to RM verification:', err);
+      setGlobalBanner({
+        type: 'error',
+        message: extractApiErrorMessage(err, 'Unable to submit the customer to RM verification. Please retry.'),
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1331,6 +1393,24 @@ export default function AddCustomer() {
               </>
             )}
           </button>
+          {!isEditMode && createdRmCustomerId && documentsReadyForSubmission && (
+            <button
+              type="button"
+              className="btn-submit"
+              onClick={handleSubmitToRm}
+              disabled={submitting || loadingCustomer || !rmId}
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw size={15} className="animate-spin" /> Submitting to RM...
+                </>
+              ) : (
+                <>
+                  Submit to RM Verification <ArrowRight size={15} strokeWidth={2} />
+                </>
+              )}
+            </button>
+          )}
         </div>
       </form>
 

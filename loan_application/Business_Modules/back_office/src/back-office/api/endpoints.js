@@ -234,6 +234,8 @@ export const BACK_OFFICE_ENDPOINTS = {
     `/ApplicationPdAssessment/bycustomer/${encodeURIComponent(agentCustomerId)}`,
 
   // Application Workflow APIs (Step 13: Final Application Actions)
+  APPLICATION_WORKFLOW_START_BACKOFFICE_VERIFICATION: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/start-backoffice-verification`,
   APPLICATION_WORKFLOW_RETURN_TO_RM: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/return-to-rm`,
   APPLICATION_WORKFLOW_SEND_TO_CREDIT: (agentCustomerId) =>

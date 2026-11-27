@@ -6,6 +6,7 @@
 
 import { getValue, mapCustomer } from '../../../back_office/src/back-office/mappers/hierarchyMapper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
+import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
 
 function isPresent(value) {
   return value !== undefined && value !== null && String(value).trim() !== '';
@@ -54,6 +55,52 @@ export const CM_STATUS_META = {
   [CM_STATUS.REJECTED]: { label: 'Rejected', className: 'cm-pill--rejected', color: '#dc2626' },
 };
 
+export const CREDIT_MANAGER_PENDING_WORKFLOW_CODES = Object.freeze([
+  'CM_APPROVAL_PENDING',
+  'CM_REVIEW_IN_PROGRESS',
+  'CH_APPROVAL_PENDING',
+  'CH_REVIEW_IN_PROGRESS',
+]);
+
+export const CREDIT_MANAGER_APPROVED_WORKFLOW_CODES = Object.freeze([
+  'CREDIT_APPROVED_MAKER_PENDING',
+  'MAKER_VERIFICATION_IN_PROGRESS',
+]);
+
+export const CREDIT_MANAGER_REJECTED_WORKFLOW_CODES = Object.freeze([
+  'APPLICATION_REJECTED',
+]);
+
+export const CREDIT_MANAGER_WORKFLOW_CODES = Object.freeze([
+  ...CREDIT_MANAGER_PENDING_WORKFLOW_CODES,
+  ...CREDIT_MANAGER_APPROVED_WORKFLOW_CODES,
+  ...CREDIT_MANAGER_REJECTED_WORKFLOW_CODES,
+]);
+
+export function isCreditManagerWorkflowCode(code) {
+  return CREDIT_MANAGER_WORKFLOW_CODES.includes(code);
+}
+
+export function isCreditManagerPendingWorkflow(code) {
+  return CREDIT_MANAGER_PENDING_WORKFLOW_CODES.includes(code);
+}
+
+export function isCreditManagerIncomingWorkflow(code) {
+  return code === 'CM_APPROVAL_PENDING';
+}
+
+export function isCreditManagerReviewWorkflow(code) {
+  return code === 'CM_REVIEW_IN_PROGRESS';
+}
+
+export function isCreditManagerApprovedWorkflow(code) {
+  return CREDIT_MANAGER_APPROVED_WORKFLOW_CODES.includes(code);
+}
+
+export function isCreditManagerRejectedWorkflow(code) {
+  return CREDIT_MANAGER_REJECTED_WORKFLOW_CODES.includes(code);
+}
+
 export const CREDIT_DECISION = {
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
@@ -64,6 +111,12 @@ export const CREDIT_DECISION_META = {
   [CREDIT_DECISION.APPROVED]: { label: 'Approved', className: 'stc-pill--verified' },
   [CREDIT_DECISION.REJECTED]: { label: 'Rejected', className: 'cm-pill--rejected' },
   [CREDIT_DECISION.RETURNED]: { label: 'Returned to Back Office', className: 'stc-pill--progress' },
+};
+
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 };
 
 export function isCreditManagerStatus(status) {
@@ -77,6 +130,7 @@ export function mapCreditApplication(raw, agentsById = {}, rmsById = {}) {
   const ownership = resolveApplicationOwnership(customer, agentsById, rmsById);
 
   const status = Number(customer.status);
+  const workflowStatus = extractWorkflowStatus(raw);
   const statusUpdatedAt = getValue(
     raw,
     'statusChangedAt',
@@ -101,6 +155,9 @@ export function mapCreditApplication(raw, agentsById = {}, rmsById = {}) {
   ) || '';
 
   const loanProductName = getValue(raw, 'loanProductName', 'LoanProductName');
+  const sanctionedLoanAmount = toNumberOrNull(
+    getValue(raw, 'sanctionedLoanAmount', 'SanctionedLoanAmount')
+  );
   const pendingEscalation = mapPendingEscalation(getValue(raw, 'pendingEscalation', 'PendingEscalation'));
 
   return {
@@ -114,13 +171,16 @@ export function mapCreditApplication(raw, agentsById = {}, rmsById = {}) {
     isAgentCreated: ownership.isAgentCreated,
     loanType: loanProductName || customer.loanType,
     status,
+    sanctionedLoanAmount,
+    workflowStatus,
+    workflowStatusCode: workflowStatus.workflowStatusCode,
+    workflowStatusName: workflowStatus.workflowStatusName,
+    workflowReason: workflowStatus.reason,
     statusUpdatedAt,
     remarks,
     pendingEscalation,
   };
 }
-
-const toNumberOrNull = (value) => (value === null || value === undefined || value === '' ? null : Number(value));
 
 /** The escalation an application in credit is waiting on, from the current user's point of view. */
 export function mapPendingEscalation(raw) {
@@ -245,6 +305,7 @@ export function mapCreditManagerProfile(raw, lookupData = {}) {
   const branch = getValue(source, 'branch', 'Branch', 'branchName', 'BranchName') || 'Not Available';
   const isActive = getValue(source, 'isActive', 'IsActive', 'status', 'Status') ?? true;
   const department = getValue(source, 'department', 'Department') || 'Credit & Risk';
+  const role = getValue(source, 'roleName', 'RoleName', 'role', 'Role', 'roleCode', 'RoleCode') || '';
   const dateOfBirth = getValue(source, 'dateOfBirth', 'DateOfBirth', 'dob', 'DOB') || null;
   const dateJoined = getValue(source, 'dateJoined', 'DateJoined', 'createdAt', 'CreatedAt', 'joiningDate', 'JoiningDate') || null;
   const genderId = getValue(source, 'genderId', 'GenderId');
@@ -291,7 +352,7 @@ export function mapCreditManagerProfile(raw, lookupData = {}) {
     emailAddress,
     branch,
     department,
-    role: 'Credit Manager',
+    role,
     status: isActive ? 'Active' : 'Inactive',
     isActive: Boolean(isActive),
     dateOfBirth,

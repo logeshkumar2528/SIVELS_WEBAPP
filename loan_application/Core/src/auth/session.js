@@ -179,7 +179,13 @@ export function getStoredUser(allowedRoles = []) {
           if (raw) {
             const cm = JSON.parse(raw);
             if (cm && typeof cm === 'object') {
-              return { ...cm, role: 'CreditManager', roleCode: r, landingPath: CREDIT_MANAGER_DASHBOARD };
+              return {
+                ...cm,
+                role: cm.role || 'CreditManager',
+                roleCode: cm.roleCode || r,
+                roleName: cm.roleName || cm.role || 'CreditManager',
+                landingPath: CREDIT_MANAGER_DASHBOARD,
+              };
             }
           }
         }
@@ -244,14 +250,18 @@ export function buildLoginUser(result, mobileNumber) {
   if (!roleCode) return null;
   const config = ROLE_CONFIG[roleCode];
   const account = result[config.accountKey] || result.staff || {};
+  const backendRole = result?.role || config.legacyRole;
+  const fullName = result?.fullName || result?.name || account.fullName || account.name;
 
   return {
     ...account,
     mobileNumber,
-    role: config.legacyRole,
+    ...(fullName ? { fullName } : {}),
+    role: backendRole,
     roleCode,
     ...roleDetails(result),
     staffId: result.staffId ?? null,
+    staffCode: result.staffCode ?? account.staffCode ?? account.employeeCode ?? null,
     userId: result.userId ?? account.userId ?? null,
     landingPath: resolveLandingPath(roleCode, result.landingPath),
   };
@@ -262,6 +272,11 @@ function roleDetails(result) {
   return {
     ...(result?.roleId != null ? { roleId: result.roleId } : {}),
     ...(result?.roleName ? { roleName: result.roleName } : {}),
+    ...(result?.staffCode ? { staffCode: result.staffCode } : {}),
+    ...(result?.departmentCode ? { departmentCode: result.departmentCode } : {}),
+    ...(result?.dashboardType ? { dashboardType: result.dashboardType } : {}),
+    ...(result?.legacyType ? { legacyType: result.legacyType } : {}),
+    ...(result?.legacyId != null ? { legacyId: result.legacyId } : {}),
     ...(Array.isArray(result?.permissions) ? { permissions: result.permissions } : {}),
   };
 }
@@ -336,10 +351,11 @@ export function persistRoleSession(result, userData) {
     case 'CREDIT_MANAGER':
     case 'CREDIT_HEAD': {
       const cmId =
-        account.creditManagerId ?? account.CreditManagerId ?? account.creditHeadId ?? account.id ?? result.staffId;
+        account.creditManagerId ?? account.CreditManagerId ?? account.creditHeadId ?? result.legacyId ?? account.id ?? result.staffId;
       const uId = toPositiveNumber(result.userId ?? account.userId);
       const creditManagerData = {
         ...account,
+        ...userData,
         ...(cmId && account.creditManagerId == null ? { creditManagerId: cmId } : {}),
         ...(uId ? { userId: uId } : {}),
       };
@@ -350,21 +366,31 @@ export function persistRoleSession(result, userData) {
         isAuthenticated: true,
         creditManagerId: cmId ? Number(cmId) : null,
         userId: uId,
-        creditManagerCode: account.creditManagerCode || account.code || '',
-        fullName: account.fullName || account.name || 'Credit Manager',
+        staffId: userData.staffId ?? null,
+        staffCode: userData.staffCode || '',
+        role: userData.role || result.role || config.legacyRole,
+        roleCode,
+        roleId: userData.roleId ?? null,
+        roleName: userData.roleName || result.roleName || userData.role || result.role || config.legacyRole,
+        departmentCode: userData.departmentCode || '',
+        legacyType: userData.legacyType || result.legacyType || '',
+        legacyId: userData.legacyId ?? result.legacyId ?? null,
+        creditManagerCode: userData.staffCode || account.creditManagerCode || account.code || '',
+        fullName: account.fullName || account.name || userData.fullName || result.fullName || result.name || 'Credit Manager',
         mobileNumber,
         emailAddress: account.emailAddress || account.email || '',
         branch: account.branch || '',
-        role: 'CreditManager',
+        permissions: userData.permissions,
         loginTimestamp: new Date().toISOString(),
       });
       setItem(CURRENT_USER_KEY, {
         ...creditManagerData,
         userId: uId,
-        role: 'CreditManager',
+        role: userData.role || result.role || config.legacyRole,
         roleCode,
+        roleName: userData.roleName || result.roleName || userData.role || result.role || config.legacyRole,
         ...roleDetails(userData),
-        staffId: userData.staffId,
+        staffId: userData.staffId ?? result.staffId ?? null,
         landingPath: userData.landingPath,
         mobileNumber,
       });
@@ -374,6 +400,7 @@ export function persistRoleSession(result, userData) {
       break;
   }
 
+  window.dispatchEvent(new CustomEvent(PERMISSIONS_CHANGED_EVENT));
   return userData.landingPath;
 }
 
@@ -388,16 +415,24 @@ export async function restoreSession(allowedRoles = []) {
   if (!roleCode) return null;
 
   const existing = getStoredUser(allowedRoles) || {};
+  const backendRole = me.role || ROLE_CONFIG[roleCode].legacyRole;
   const merged = {
     ...existing,
-    role: ROLE_CONFIG[roleCode].legacyRole,
+    role: backendRole,
     roleCode,
     ...roleDetails(me),
-    mobileNumber: existing.mobileNumber || me.mobileNumber,
+    mobileNumber: me.mobileNumber ?? existing.mobileNumber,
   };
   if (me.staffId != null) merged.staffId = me.staffId;
+  if (me.staffCode != null) merged.staffCode = me.staffCode;
+  if (me.fullName || me.name) merged.fullName = me.fullName || me.name;
+  if (me.legacyId != null) merged.legacyId = me.legacyId;
+  if ((roleCode === 'CREDIT_MANAGER' || roleCode === 'CREDIT_HEAD') && (me.legacyId != null || me.creditManagerId != null || me.creditHeadId != null)) {
+    merged.creditManagerId = me.legacyId ?? me.creditManagerId ?? me.creditHeadId;
+  }
+  if (me.roleName) merged.roleName = me.roleName;
+  else if (!merged.roleName) merged.roleName = backendRole;
   if (me.landingPath) merged.landingPath = resolveLandingPath(roleCode, me.landingPath);
-  if (!existing.fullName && me.fullName) merged.fullName = me.fullName;
 
   try {
     if (typeof sessionStorage !== 'undefined') {
@@ -447,5 +482,6 @@ async function performLogout({ allDevices = false } = {}) {
   }
 
   clearSession();
+  window.dispatchEvent(new CustomEvent(PERMISSIONS_CHANGED_EVENT));
   navigation.replace(LOGIN_PATH);
 }

@@ -9,12 +9,14 @@ const DOCUMENT_TYPE_BY_VIEW = Object.freeze({
   form: OPERATIONS_DOCUMENT_TYPES.APPLICATION_FORM,
   recommendation: OPERATIONS_DOCUMENT_TYPES.RECOMMENDATION_SHEET,
   sanction: OPERATIONS_DOCUMENT_TYPES.SANCTION_LETTER,
+  kfs: OPERATIONS_DOCUMENT_TYPES.KFS,
 });
 
 const DOCUMENT_TITLE_BY_VIEW = Object.freeze({
   form: 'View Form',
   recommendation: 'Recommendation Sheet',
   sanction: 'Sanction Letter',
+  kfs: 'Key Facts Statement',
 });
 
 function getErrorMessage(error) {
@@ -31,6 +33,7 @@ function ReadOnlyApplicationDocumentViewer({ application, type }) {
   const objectUrlRef = useRef(null);
   const [state, setState] = useState({ status: 'loading', message: '' });
   const [documentUrl, setDocumentUrl] = useState('');
+  const [documentFileName, setDocumentFileName] = useState('KFS.pdf');
   const [retryKey, setRetryKey] = useState(0);
 
   const applicationProductDetailsId =
@@ -46,6 +49,7 @@ function ReadOnlyApplicationDocumentViewer({ application, type }) {
       objectUrlRef.current = null;
     }
     setDocumentUrl('');
+    setDocumentFileName(`${DOCUMENT_TITLE_BY_VIEW[type] || 'Application Document'}.pdf`);
     setState({ status: 'loading', message: '' });
 
     if (!applicationProductDetailsId || !documentType) {
@@ -83,6 +87,11 @@ function ReadOnlyApplicationDocumentViewer({ application, type }) {
         const nextObjectUrl = URL.createObjectURL(pdfBlob);
         objectUrlRef.current = nextObjectUrl;
         setDocumentUrl(nextObjectUrl);
+        setDocumentFileName(
+          metadata?.fileName
+          ?? metadata?.FileName
+          ?? `${DOCUMENT_TITLE_BY_VIEW[type] || 'Application Document'}.pdf`
+        );
         setState({ status: 'ready', message: '' });
       } catch (error) {
         if (!active || requestId !== requestIdRef.current) return;
@@ -126,6 +135,11 @@ function ReadOnlyApplicationDocumentViewer({ application, type }) {
 
   return (
     <div className="operations-document-viewer__legacy-frame">
+      {type === 'kfs' && (
+        <div className="operations-document-viewer__document-actions">
+          <a href={documentUrl} download={documentFileName}>Download PDF</a>
+        </div>
+      )}
       <iframe
         title={DOCUMENT_TITLE_BY_VIEW[type] || 'Application document'}
         src={documentUrl}
