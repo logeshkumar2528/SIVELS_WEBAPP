@@ -22,11 +22,11 @@ const columns = [
 ];
 
 export default function ReceivedApplications() {
-  const { applications, loading, error, refetch } = useCreditApplications();
+  const { received, loading, error, refetch } = useCreditApplications();
 
   return (
     <ApplicationQueue
-      applications={applications}
+      applications={received}
       columns={columns}
       title="Applications Received from Back Office"
       showStatusFilter

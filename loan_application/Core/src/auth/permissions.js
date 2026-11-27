@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TAB_USER_KEY } from './tokenStore';
 
 // Kept in step with session.js (CURRENT_USER_KEY); not imported to avoid a cycle through the HTTP client.
 const CURRENT_USER_KEY = 'sivels_currentUser';
@@ -24,6 +25,13 @@ const LEVEL_VERBS = { VIEW: 'view', EDIT: 'edit', APPROVE: 'approve' };
 
 function readUser() {
   try {
+    if (typeof sessionStorage !== 'undefined') {
+      const tabRaw = sessionStorage.getItem(TAB_USER_KEY);
+      if (tabRaw) {
+        const tabUser = JSON.parse(tabRaw);
+        if (tabUser && typeof tabUser === 'object') return tabUser;
+      }
+    }
     const raw = localStorage.getItem(CURRENT_USER_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     return parsed && typeof parsed === 'object' ? parsed : null;
@@ -77,6 +85,9 @@ export function storeRoleDetails(response) {
     ...(response.roleName ? { roleName: response.roleName } : {}),
   };
   try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(next));
+    }
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(next));
   } catch {
     return false;

@@ -14,6 +14,7 @@
  */
 
 import { getValue } from './hierarchyMapper';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 
 /**
  * Safely extracts the first element if the input is an array, otherwise returns the object or empty object.
@@ -51,6 +52,11 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
 
   const rawCustomer = response.customer || response.Customer || response;
   const customer = firstItem(rawCustomer);
+  const responseWorkflowStatus = extractWorkflowStatus(response);
+  const customerWorkflowStatus = extractWorkflowStatus(customer);
+  const workflowStatus = responseWorkflowStatus.hasDetailedWorkflowStatus
+    ? responseWorkflowStatus
+    : customerWorkflowStatus;
 
   const rawProduct =
     response.productDetails ||
@@ -537,6 +543,10 @@ export function mapApplicationFullDetails(response, extraDocs = []) {
     agentName: agentName || 'Not Available',
     appliedDate: appliedDate ? String(appliedDate).slice(0, 10) : 'Not Available',
     overallStatus,
+    workflowStatus,
+    workflowStatusCode: workflowStatus.workflowStatusCode,
+    workflowStatusName: workflowStatus.workflowStatusName,
+    workflowReason: workflowStatus.reason,
 
     customer,
     application: productDetails,

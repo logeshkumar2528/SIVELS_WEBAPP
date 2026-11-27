@@ -52,6 +52,9 @@ import {
   CM_STATUS_META,
   CREDIT_DECISION,
   CREDIT_DECISION_META,
+  isCreditManagerIncomingWorkflow,
+  isCreditManagerPendingWorkflow,
+  isCreditManagerReviewWorkflow,
   mapApprovalEscalation,
   mapApprovalLimit,
   mapCreditDecision,
@@ -67,6 +70,8 @@ import {
 import SectionReviewBar from '../components/SectionReviewBar';
 import { useReviewSections } from '../hooks/useReviewSections';
 import { getApplicationNo, parseDate } from '../utils/formatters';
+import { extractApiErrorMessage } from '../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
 
 const FINAL_ACTION_STEP = '13';
 
@@ -88,11 +93,65 @@ function formatDateTime(value) {
   });
 }
 
+function getPendingEscalation(value) {
+  if (!value || typeof value !== 'object') return null;
+  const sources = [
+    value,
+    value.value,
+    value.Value,
+    value.data,
+    value.Data,
+    value.result,
+    value.Result,
+    value.workflow,
+    value.Workflow,
+  ];
+  return sources.find((source) => source?.pendingEscalation || source?.PendingEscalation)?.pendingEscalation ||
+    sources.find((source) => source?.pendingEscalation || source?.PendingEscalation)?.PendingEscalation ||
+    null;
+}
+
+export function getCreditDecisionEligibility({ workflowStatusCode, legacyStatus, pendingEscalation }) {
+  const hasDetailedStatus = Boolean(workflowStatusCode);
+  const isIncoming = workflowStatusCode === 'CM_APPROVAL_PENDING';
+  const isReviewInProgress = isCreditManagerReviewWorkflow(workflowStatusCode);
+  const isPending = hasDetailedStatus
+    ? isCreditManagerPendingWorkflow(workflowStatusCode)
+    : Number(legacyStatus) === CM_STATUS.PENDING;
+  const isWaitingForAnotherRole = Boolean(pendingEscalation?.isWaitingForAnotherRole);
+  const canCurrentUserApprove = pendingEscalation?.canCurrentUserApprove === true;
+
+  return {
+    isPending,
+    isIncoming,
+    isWaitingForAnotherRole,
+    canCurrentUserApprove,
+    canWork:
+      isPending &&
+      !isIncoming &&
+      !isWaitingForAnotherRole &&
+      (!hasDetailedStatus || isReviewInProgress || canCurrentUserApprove),
+  };
+}
+
+function expectedTransitionCodes(actionKey) {
+  switch (actionKey) {
+    case 'APPROVE':
+      return ['CREDIT_APPROVED_MAKER_PENDING'];
+    case 'REJECT':
+      return ['APPLICATION_REJECTED'];
+    case 'RETURN':
+      return ['RETURNED_TO_BO_CORRECTION_PENDING'];
+    default:
+      return [];
+  }
+}
+
 function useCreditManagerActingIdentity() {
   const identity = useMemo(() => {
     const auth = getCreditManagerAuth();
     const id = Number(auth?.creditManagerId);
-    return id > 0 ? { id, name: auth?.name || '', role: 'CreditManager' } : null;
+    return id > 0 ? { id, name: auth?.name || '', role: auth?.role || 'CreditManager' } : null;
   }, []);
 
   // Set synchronously so the workspace's first render already resolves the Credit Manager.
@@ -104,7 +163,7 @@ function useCreditManagerActingIdentity() {
   }, [identity]);
 }
 
-function PendingFlagsCard({ flags, onRemove, onReturn, canReturn }) {
+function PendingFlagsCard({ flags, onRemove, onReturn, canReturn, canEdit }) {
   const TrashIcon = iconMap['Trash2'];
   const RotateCcwIcon = iconMap['RotateCcw'];
 
@@ -123,7 +182,12 @@ function PendingFlagsCard({ flags, onRemove, onReturn, canReturn }) {
               <strong>{item.sectionName} › {item.fieldLabel}</strong>
               <p>{item.issue}</p>
             </div>
-            <button type="button" onClick={() => onRemove(index)} aria-label={`Remove ${item.fieldLabel}`}>
+            <button
+              type="button"
+              onClick={() => onRemove(index)}
+              disabled={!canEdit}
+              aria-label={`Remove ${item.fieldLabel}`}
+            >
               {TrashIcon && <TrashIcon size={15} />}
             </button>
           </li>
@@ -185,6 +249,7 @@ export function CreditDecisionPanel({
   error,
   successMessage,
   onDismissSuccess,
+  synchronizationWarning,
   onAction,
   onViewDocument,
   onDownloadDocument,
@@ -192,8 +257,14 @@ export function CreditDecisionPanel({
   onDismissIdentifierWarning,
   approvalLimit = null,
   approvalCheck = null,
+  sanctionedAmount = null,
   pendingEscalation = null,
   escalations = [],
+  workflowStatusName = null,
+  canStartReview = false,
+  startingReview = false,
+  onStartReview,
+  canWork = isPending,
 }) {
   const { can } = usePermissions();
   const canDecide = can('CREDIT.APPROVE');
@@ -204,7 +275,6 @@ export function CreditDecisionPanel({
   const EyeIcon = iconMap['Eye'];
   const DownloadIcon = iconMap['Download'];
   const FileTextIcon = iconMap['FileText'];
-  const FileCheckIcon = iconMap['FileCheck'];
   const ArrowRightIcon = iconMap['ArrowRight'];
 
   const isDecisionComplete = useMemo(() => {
@@ -228,10 +298,17 @@ export function CreditDecisionPanel({
   const awaitingReviewCount = awaitingReviewSections.reduce((sum, s) => sum + s.count, 0);
   const allSectionsApproved = review.approvedCount === review.totalSections;
   const isWaitingForAnotherRole = Boolean(pendingEscalation?.isWaitingForAnotherRole);
-  const canAct = isPending && canDecide && !isWaitingForAnotherRole;
+  const canAct = canWork && canDecide && !isWaitingForAnotherRole;
   const limitReason = limitExceededReason(approvalCheck);
+  const approvalCheckUnavailable =
+    !approvalCheck ||
+    approvalCheck.loading ||
+    approvalCheck.amount == null ||
+    Number(approvalCheck.amount) !== Number(sanctionedAmount);
   const approveBlockedReason = approvalCheck?.loading
     ? 'Checking your approval limit…'
+    : approvalCheckUnavailable
+    ? 'Approval limit confirmation is not available for the current sanctioned amount.'
     : limitReason
     ? limitReason
     : awaitingReviewCount
@@ -255,6 +332,13 @@ export function CreditDecisionPanel({
       )}
 
       {error && <div className="cm-form-alert" role="alert">{error}</div>}
+
+      {synchronizationWarning && (
+        <div className="cm-form-alert" role="alert">
+          {AlertCircleIcon && <AlertCircleIcon size={16} />}
+          <span>{synchronizationWarning}</span>
+        </div>
+      )}
 
       {identifierWarning && (
         <div className="cm-form-alert" role="alert" style={{ marginBottom: 12 }}>
@@ -307,6 +391,7 @@ export function CreditDecisionPanel({
           flags={pendingFlags}
           onRemove={onRemoveFlag}
           canReturn={canAct}
+          canEdit={canAct}
           onReturn={() => onAction(DECISION_ACTIONS.RETURN)}
         />
       )}
@@ -331,11 +416,23 @@ export function CreditDecisionPanel({
 
         {isPending ? (
           <>
+            {workflowStatusName && (
+              <div className="stc-submit-info-box" role="status">
+                Current workflow status: <strong>{workflowStatusName}</strong>
+              </div>
+            )}
+            {canStartReview && (
+              <div className="cm-decision-actions">
+                <button type="button" className="stc-btn-doc cm-btn-forward" onClick={onStartReview} disabled={startingReview}>
+                  {startingReview ? 'Starting Review…' : 'Start Credit Review'}
+                </button>
+              </div>
+            )}
             <EscalationBanner
               escalation={pendingEscalation}
               remarks={escalations.find((item) => item.isPending)?.remarks}
             />
-            {!isWaitingForAnotherRole && (
+            {!isWaitingForAnotherRole && !canStartReview && (
               <div className="stc-submit-info-box">
                 {AlertCircleIcon && <AlertCircleIcon size={18} style={{ flexShrink: 0 }} />}
                 <div>
@@ -353,7 +450,7 @@ export function CreditDecisionPanel({
                 This application has been forwarded to {pendingEscalation?.toRoleName || 'another role'} and is
                 read-only for you.
               </p>
-            ) : canDecide ? (
+            ) : canAct && !canStartReview ? (
               <>
                 {approveBlockedReason && <p className="cm-approve-blocked">{approveBlockedReason}</p>}
                 <div className="cm-decision-actions">
@@ -387,7 +484,9 @@ export function CreditDecisionPanel({
               </>
             ) : (
               <p className="cm-approve-blocked">
-                Your role can review this application but can&apos;t record a credit decision.
+                {canDecide
+                  ? 'This application is not currently assigned to you for a Credit Manager decision.'
+                  : "Your role can review this application but can't record a credit decision."}
               </p>
             )}
           </>
@@ -503,51 +602,6 @@ export function CreditDecisionPanel({
               </div>
             </div>
 
-            {/* 2. Key Facts Statement (KFS) Card */}
-            <div
-              className="cm-approved-doc-card"
-              style={{
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '16px',
-                background: '#ffffff',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  {FileCheckIcon && <FileCheckIcon size={18} color="#0F7A4C" />}
-                  <strong style={{ fontSize: '15px', color: '#0f172a' }}>Key Facts Statement (KFS)</strong>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="stc-btn-doc"
-                  onClick={() => onViewDocument && onViewDocument(DOC_TYPES.KFS)}
-                  disabled={!isDecisionComplete}
-                  title={!isDecisionComplete ? 'Decision terms incomplete' : 'View Key Facts Statement'}
-                  style={{ flex: 1, justifyContent: 'center' }}
-                >
-                  {EyeIcon && <EyeIcon size={14} />}
-                  <span>View</span>
-                </button>
-                <button
-                  type="button"
-                  className="stc-btn-doc cm-btn-approve"
-                  onClick={() => onDownloadDocument && onDownloadDocument(DOC_TYPES.KFS)}
-                  disabled={!isDecisionComplete}
-                  title={!isDecisionComplete ? 'Decision terms incomplete' : 'Download Key Facts Statement PDF'}
-                  style={{ flex: 1, justifyContent: 'center' }}
-                >
-                  {DownloadIcon && <DownloadIcon size={14} />}
-                  <span>Download</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -575,6 +629,10 @@ export default function ApplicationReview() {
   const [approvalLimit, setApprovalLimit] = useState(null);
   const [escalations, setEscalations] = useState([]);
   const [approvalCheck, setApprovalCheck] = useState(null);
+  const [startingReview, setStartingReview] = useState(false);
+  const [confirmedWorkflow, setConfirmedWorkflow] = useState(null);
+  const [decisionLock, setDecisionLock] = useState(false);
+  const [synchronizationWarning, setSynchronizationWarning] = useState('');
   const [loanClassification, setLoanClassification] = useState(null);
   const isUnsecured =
     loanClassification?.status === 'RESOLVED' && loanClassification?.typeCode === 'UNSEC';
@@ -585,6 +643,9 @@ export default function ApplicationReview() {
 
   useEffect(() => {
     setLoanClassification(null);
+    setConfirmedWorkflow(null);
+    setDecisionLock(false);
+    setSynchronizationWarning('');
   }, [customerId]);
 
   const review = useReviewSections(customerId, isUnsecured);
@@ -627,14 +688,14 @@ export default function ApplicationReview() {
   }, []);
 
   const ShieldCheckIcon = iconMap['ShieldCheck'];
-  const FileCheckIcon = iconMap['FileCheck'];
   const AlertTriangleIcon = iconMap['AlertTriangle'];
   const XIcon = iconMap['X'];
 
   const loadDecisions = useCallback(async () => {
-    if (!customerId) return;
+    if (!customerId) return false;
     setDecisionLoading(true);
     setDecisionError('');
+    let successful = true;
     const [decisionRes, itemsRes] = await Promise.allSettled([
       creditManagerService.getCreditDecisions(customerId),
       creditManagerService.getCreditReturnItems(customerId),
@@ -644,12 +705,15 @@ export default function ApplicationReview() {
     } else if (decisionRes.reason?.response?.status === 404) {
       setDecisions([]);
     } else {
+      successful = false;
       setDecisionError(getErrorMessage(decisionRes.reason, 'Unable to load credit decisions.'));
     }
+    if (itemsRes.status !== 'fulfilled') successful = false;
     setReturnItems(
       itemsRes.status === 'fulfilled' ? itemsRes.value.map(mapCreditReturnItem).filter(Boolean) : []
     );
     setDecisionLoading(false);
+    return successful;
   }, [customerId]);
 
   useEffect(() => {
@@ -657,7 +721,7 @@ export default function ApplicationReview() {
   }, [loadDecisions]);
 
   const loadApprovalState = useCallback(async () => {
-    if (!customerId) return;
+    if (!customerId) return false;
     const [limitRes, escalationRes] = await Promise.allSettled([
       creditManagerService.getMyApprovalLimit({ agentCustomerId: customerId }),
       creditManagerService.getApprovalEscalations(customerId),
@@ -671,6 +735,7 @@ export default function ApplicationReview() {
     setEscalations(
       escalationRes.status === 'fulfilled' ? escalationRes.value.map(mapApprovalEscalation).filter(Boolean) : []
     );
+    return limitRes.status === 'fulfilled' && escalationRes.status === 'fulfilled';
   }, [customerId]);
 
   useEffect(() => {
@@ -757,8 +822,22 @@ export default function ApplicationReview() {
     };
   }, [rtrTerms.loading, rtrTerms.amount, customerId]);
 
-  const status = Number(queueApp?.status);
-  const isPending = status === CM_STATUS.PENDING;
+  const queueWorkflowStatus = extractWorkflowStatus(queueApp);
+  const detailWorkflowStatus = extractWorkflowStatus(verificationData);
+  const workflowStatus = confirmedWorkflow?.status || (queueWorkflowStatus.hasDetailedWorkflowStatus
+    ? queueWorkflowStatus
+    : detailWorkflowStatus);
+  const workflowStatusCode = workflowStatus.workflowStatusCode;
+  const workflowStatusName = workflowStatus.workflowStatusName;
+  const status = Number(queueApp?.status ?? verificationData?.overallStatus);
+  const pendingEscalation = confirmedWorkflow?.pendingEscalation || queueApp?.pendingEscalation || approvalLimit?.pendingEscalation || null;
+  const decisionEligibility = getCreditDecisionEligibility({
+    workflowStatusCode,
+    legacyStatus: workflowStatus.legacyStatus ?? status,
+    pendingEscalation,
+  });
+  const isPending = decisionEligibility.isPending;
+  const canStartReview = isCreditManagerIncomingWorkflow(workflowStatusCode);
   const statusMeta = CM_STATUS_META[status];
   const latestDecision = decisions[0] || null;
   const latestReturn = decisions.find((d) => d.decision === CREDIT_DECISION.RETURNED) || null;
@@ -782,8 +861,41 @@ export default function ApplicationReview() {
     return counts;
   }, [returnItems]);
   const isResubmitted = isPending && latestDecision?.decision === CREDIT_DECISION.RETURNED;
-  const pendingEscalation = approvalLimit ? approvalLimit.pendingEscalation : queueApp?.pendingEscalation || null;
-  const canWork = isPending && !pendingEscalation?.isWaitingForAnotherRole;
+  const canWork = !decisionLock && decisionEligibility.canWork;
+
+  const handleStartReview = async () => {
+    if (startingReview || !canStartReview || !customerId) return;
+    const auth = getCreditManagerAuth();
+    const actorId = Number(auth?.creditManagerId);
+    if (!actorId) {
+      setDecisionError('Your Credit Manager session has expired. Please log in again.');
+      return;
+    }
+    setStartingReview(true);
+    setDecisionError('');
+    try {
+      const response = await creditManagerService.startCreditReview(customerId, {
+        performedByUserId: actorId,
+        performedByRole: auth?.role || 'CreditManager',
+        remarks: 'Started Credit Manager review',
+      });
+      const transitionStatus = extractWorkflowStatus(response);
+      const refreshedApplications = await refetchQueue();
+      const refreshedApplication = Array.isArray(refreshedApplications)
+        ? refreshedApplications.find((item) => String(item.agentCustomerId) === String(customerId))
+        : null;
+      const refreshedStatus = extractWorkflowStatus(refreshedApplication);
+      const confirmedStatus = transitionStatus.hasDetailedWorkflowStatus ? transitionStatus : refreshedStatus;
+      if (confirmedStatus.workflowStatusCode !== 'CM_REVIEW_IN_PROGRESS') {
+        throw new Error('The server did not confirm Credit Manager Review In Progress. Please refresh and retry.');
+      }
+      setSuccessMessage(confirmedStatus.workflowStatusName || 'Credit Manager review started.');
+    } catch (err) {
+      setDecisionError(extractApiErrorMessage(err, 'Unable to start Credit Manager review.'));
+    } finally {
+      setStartingReview(false);
+    }
+  };
 
   const handleBack = useCallback(() => {
     // 1. Priority: Validated originating queue route from navigation state
@@ -846,20 +958,22 @@ export default function ApplicationReview() {
         canEdit={canWork}
         compact={compact}
         onToggleEdit={onToggleEdit}
-        onApprove={() => review.approve(section.id)}
-        onUnapprove={() => review.unapprove(section.id)}
-        onReject={onReject}
-        onClearFlags={() => review.clearSectionFlags(section.id)}
+        onApprove={() => canWork && review.approve(section.id)}
+        onUnapprove={() => canWork && review.unapprove(section.id)}
+        onReject={() => canWork && onReject()}
+        onClearFlags={() => canWork && review.clearSectionFlags(section.id)}
       />
     ),
   };
 
   const handleSectionFlag = (step, { returnNow = false } = {}) => {
+    if (!canWork) return;
     addFlag(step);
     if (returnNow && canWork) setActiveAction(DECISION_ACTIONS.RETURN);
   };
 
   const handleAcceptReturnItem = async (item, reviewRemarks) => {
+    if (!canWork) throw new Error('This application is not currently assigned to you for a Credit Manager decision.');
     const creditManagerId = getCreditManagerId();
     if (!creditManagerId) throw new Error('Your Credit Manager session has expired. Please log in again.');
     await creditManagerService.acceptCreditReturnItem(item.id, {
@@ -879,18 +993,102 @@ export default function ApplicationReview() {
   };
 
   const handleDecisionSubmit = async (action, payload) => {
-    const result = await action.call(customerId, payload);
-    const isForward = action?.key === 'FORWARD';
-    setActiveAction(null);
-    review.reload();
-    setSuccessMessage(
-      isForward
-        ? result?.message || `Application forwarded to ${result?.toRoleName || 'the approving authority'}.`
-        : action.successMessage
+    setSynchronizationWarning('');
+    const currentEligibility = getCreditDecisionEligibility({
+      workflowStatusCode,
+      legacyStatus: workflowStatus.legacyStatus ?? status,
+      pendingEscalation,
+    });
+    if (decisionLock || !currentEligibility.canWork) {
+      throw new Error('This application is not currently assigned to you for a Credit Manager decision.');
+    }
+
+    const latestApplications = await refetchQueue();
+    if (!Array.isArray(latestApplications)) {
+      throw new Error('Unable to confirm the latest application workflow. Refresh and retry.');
+    }
+    const latestApplication = latestApplications.find(
+      (item) => String(item.agentCustomerId) === String(customerId)
     );
-    refetchQueue();
-    loadDecisions();
-    loadApprovalState();
+    const latestWorkflow = extractWorkflowStatus(latestApplication);
+    const latestEscalation = latestApplication?.pendingEscalation || pendingEscalation;
+    const latestEligibility = getCreditDecisionEligibility({
+      workflowStatusCode: latestWorkflow.workflowStatusCode,
+      legacyStatus: latestWorkflow.legacyStatus ?? latestApplication?.status,
+      pendingEscalation: latestEscalation,
+    });
+    if (!latestEligibility.canWork) {
+      throw new Error('This application is no longer assigned to you for a Credit Manager decision.');
+    }
+
+    let result;
+    try {
+      result = await action.call(customerId, payload);
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        await Promise.allSettled([refetchQueue(), loadDecisions(), loadApprovalState()]);
+      }
+      throw err;
+    }
+
+    const responseWorkflow = extractWorkflowStatus(result);
+    const responseEscalation = getPendingEscalation(result);
+    const expectedCodes = expectedTransitionCodes(action?.key);
+    const isForward = action?.key === 'FORWARD';
+
+    const refreshResults = await Promise.allSettled([
+      refetchQueue(),
+      review.reload(),
+      loadDecisions(),
+      loadApprovalState(),
+    ]);
+    const queueRefresh = refreshResults[0].status === 'fulfilled' ? refreshResults[0].value : undefined;
+    const reviewRefresh = refreshResults[1].status === 'fulfilled' ? refreshResults[1].value : false;
+    const decisionRefresh = refreshResults[2].status === 'fulfilled' ? refreshResults[2].value : false;
+    const approvalRefresh = refreshResults[3].status === 'fulfilled' ? refreshResults[3].value : false;
+    const refreshedApplication = Array.isArray(queueRefresh)
+      ? queueRefresh.find((item) => String(item.agentCustomerId) === String(customerId))
+      : null;
+    const refreshedWorkflow = extractWorkflowStatus(refreshedApplication);
+    const confirmedStatus = responseWorkflow.hasDetailedWorkflowStatus ? responseWorkflow : refreshedWorkflow;
+    const confirmedEscalation = responseEscalation || refreshedApplication?.pendingEscalation || null;
+    const transitionIsValid = isForward
+      ? isCreditManagerPendingWorkflow(confirmedStatus.workflowStatusCode) &&
+        confirmedStatus.workflowStatusCode !== 'CM_APPROVAL_PENDING' &&
+        (Boolean(confirmedEscalation) || confirmedStatus.workflowStatusCode !== 'CM_REVIEW_IN_PROGRESS')
+      : expectedCodes.includes(confirmedStatus.workflowStatusCode);
+
+    setActiveAction(null);
+    setDecisionLock(true);
+
+    if (!transitionIsValid) {
+      setConfirmedWorkflow({ status: confirmedStatus, pendingEscalation: confirmedEscalation });
+      setDecisionError(
+        `The server returned an unexpected workflow state${confirmedStatus.workflowStatusName ? `: ${confirmedStatus.workflowStatusName}` : ''}. Refresh before taking another action.`
+      );
+      setSuccessMessage('');
+      return;
+    }
+
+    setConfirmedWorkflow(
+      Array.isArray(queueRefresh) ? null : { status: confirmedStatus, pendingEscalation: confirmedEscalation }
+    );
+    setSuccessMessage(
+      result?.message ||
+        (isForward
+          ? `Application forwarded to ${result?.toRoleName || confirmedEscalation?.toRoleName || 'the approving authority'}.`
+          : action.successMessage)
+    );
+    const refreshFailed =
+      refreshResults.some((result) => result.status === 'rejected') ||
+      [queueRefresh, reviewRefresh, decisionRefresh, approvalRefresh].some(
+        (value) => value === false || value === undefined
+      );
+    setSynchronizationWarning(
+      refreshFailed
+        ? 'The workflow transition was confirmed, but some application details could not be synchronized. Refresh before continuing.'
+        : ''
+    );
 
     if (action?.key === 'APPROVE') {
       try {
@@ -927,7 +1125,7 @@ export default function ApplicationReview() {
             review={review}
             onOpenSection={goToStep}
             pendingFlags={pendingFlags}
-            onRemoveFlag={(index) => setPendingFlags((prev) => prev.filter((_, i) => i !== index))}
+            onRemoveFlag={(index) => canWork && setPendingFlags((prev) => prev.filter((_, i) => i !== index))}
             latestDecision={latestDecision}
             latestReturn={latestReturn}
             latestReturnItems={latestReturnItems}
@@ -936,6 +1134,7 @@ export default function ApplicationReview() {
             error={decisionError}
             successMessage={successMessage}
             onDismissSuccess={() => setSuccessMessage('')}
+            synchronizationWarning={synchronizationWarning}
             onAction={setActiveAction}
             onViewDocument={handleViewDocument}
             onDownloadDocument={handleDownloadDocument}
@@ -943,8 +1142,14 @@ export default function ApplicationReview() {
             onDismissIdentifierWarning={() => setIdentifierWarning('')}
             approvalLimit={approvalLimit}
             approvalCheck={approvalCheck}
+            sanctionedAmount={rtrTerms.amount}
             pendingEscalation={pendingEscalation}
             escalations={escalations}
+            workflowStatusName={workflowStatusName}
+            canStartReview={canStartReview}
+            startingReview={startingReview}
+            onStartReview={handleStartReview}
+            canWork={canWork}
           />
         }
       />
@@ -981,6 +1186,7 @@ export default function ApplicationReview() {
           coApplicants={coApplicants}
           applicationProductDetailsId={applicationProductDetailsId}
           creditDecision={latestDecision}
+           showKfs={false}
         />
       )}
 
@@ -992,6 +1198,7 @@ export default function ApplicationReview() {
           approvalCheck={activeAction.key === 'APPROVE' ? approvalCheck : null}
           initialIssues={activeAction.key === 'RETURN' ? pendingFlags : []}
           onIssuesChange={setPendingFlags}
+          canSubmitAction={canWork}
           onClose={() => setActiveAction(null)}
           onSubmitted={handleDecisionSubmit}
         />

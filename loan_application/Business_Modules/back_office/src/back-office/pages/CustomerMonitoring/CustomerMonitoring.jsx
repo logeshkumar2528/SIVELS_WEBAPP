@@ -43,58 +43,76 @@ function formatCurrency(amount) {
  * Resolves standard display label and CSS class modifier for backend status.
  * Handles numeric enums (0-6), string labels, or null/undefined.
  */
-function getStatusInfo(status) {
+const STATUS_UNAVAILABLE_FILTER = '__STATUS_UNAVAILABLE__';
+
+function getStatusInfo(customer) {
+  const workflowCode = String(customer?.workflowStatusCode || '').trim().toUpperCase();
+  if (workflowCode) {
+    const className = workflowCode.includes('REJECTED') || workflowCode.includes('RETURNED')
+      ? 'is-rejected'
+      : workflowCode.includes('APPROVED')
+        ? 'is-approved'
+        : workflowCode.includes('VERIFICATION') || workflowCode.includes('REVIEW') || workflowCode.includes('APPROVAL')
+          ? 'is-review'
+          : 'is-pending';
+    return {
+      label: customer.workflowStatusName || 'Status unavailable',
+      className,
+    };
+  }
+
+  const status = customer?.status;
   if (status === null || status === undefined) {
-    return { label: 'RM Pending', className: 'is-pending' };
+    return { label: 'Status unavailable', className: 'is-pending' };
   }
 
   // Handle Numeric Status Codes
   if (typeof status === 'number') {
     switch (status) {
       case 2:
-        return { label: 'Logged to HO', className: 'is-review' };
+        return { label: 'Status unavailable', className: 'is-review' };
       case 3:
-        return { label: 'CM Pending', className: 'is-review' };
+        return { label: 'Status unavailable', className: 'is-review' };
       case 4:
-        return { label: 'Approved', className: 'is-approved' };
+        return { label: 'Status unavailable', className: 'is-approved' };
       case 5:
-        return { label: 'Rejected', className: 'is-rejected' };
+        return { label: 'Status unavailable', className: 'is-rejected' };
       case 6:
-        return { label: 'Returned', className: 'is-rejected' };
+        return { label: 'Status unavailable', className: 'is-rejected' };
       case 1:
-        return { label: 'RM Pending', className: 'is-pending' };
+        return { label: 'Status unavailable', className: 'is-pending' };
       case 0:
-        return { label: 'New', className: 'is-pending' };
+        return { label: 'Status unavailable', className: 'is-pending' };
       default:
-        return { label: 'RM Pending', className: 'is-pending' };
+        return { label: 'Status unavailable', className: 'is-pending' };
     }
   }
 
   // Handle String Status Values
   const s = String(status).toLowerCase().trim();
   if (s === '2' || s.includes('logged to ho') || s.includes('submitted to ho') || s.includes('received')) {
-    return { label: 'Logged to HO', className: 'is-review' };
+    return { label: 'Status unavailable', className: 'is-review' };
   }
   if (s === '3' || s.includes('cm pending') || s.includes('review') || s.includes('verification')) {
-    return { label: 'CM Pending', className: 'is-review' };
+    return { label: 'Status unavailable', className: 'is-review' };
   }
   if (s === '4' || s.includes('approved')) {
-    return { label: 'Approved', className: 'is-approved' };
+    return { label: 'Status unavailable', className: 'is-approved' };
   }
   if (s === '5' || s.includes('reject')) {
-    return { label: 'Rejected', className: 'is-rejected' };
+    return { label: 'Status unavailable', className: 'is-rejected' };
   }
   if (s === '6' || s.includes('bo returned') || s.includes('return')) {
-    return { label: 'Returned', className: 'is-rejected' };
+    return { label: 'Status unavailable', className: 'is-rejected' };
   }
   if (s === '1' || s.includes('rm pending') || s.includes('pending') || s.includes('sourced')) {
-    return { label: 'RM Pending', className: 'is-pending' };
+    return { label: 'Status unavailable', className: 'is-pending' };
   }
   if (s === '0' || s.includes('draft') || s.includes('new')) {
-    return { label: 'New', className: 'is-pending' };
+    return { label: 'Status unavailable', className: 'is-pending' };
   }
 
-  return { label: String(status), className: 'is-pending' };
+  return { label: 'Status unavailable', className: 'is-pending' };
 }
 
 /**
@@ -169,8 +187,14 @@ export default function CustomerMonitoring() {
   }, [customers]);
 
   const statusOptions = useMemo(() => {
-    const list = [...new Set(customers.map((c) => getStatusInfo(c.status).label).filter(Boolean))].sort();
-    return list;
+    const options = new Map();
+    customers.forEach((customer) => {
+      const value = customer.workflowStatusCode || STATUS_UNAVAILABLE_FILTER;
+      options.set(value, getStatusInfo(customer).label);
+    });
+    return [...options.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
   }, [customers]);
 
   // 6. Reset Page to 1 When Search or Filters Change
@@ -214,10 +238,11 @@ export default function CustomerMonitoring() {
           String(c.agentId) === agentFilter;
 
         // Status Filter
-        const statusLabel = getStatusInfo(c.status).label;
         const matchStatus =
           statusFilter === 'All' ||
-          statusLabel.toLowerCase() === statusFilter.toLowerCase();
+          (c.workflowStatusCode
+            ? c.workflowStatusCode === statusFilter
+            : statusFilter === STATUS_UNAVAILABLE_FILTER);
 
         if (!matchDistrict || !matchRM || !matchAgent || !matchStatus) return false;
 
@@ -226,20 +251,24 @@ export default function CustomerMonitoring() {
 
         const customerName = (c.customerName || c.name || '').toLowerCase();
         const mobile = String(c.mobile || '');
-        const appNo = String(c.appId || (c.applicationNo && !c.applicationNo.startsWith('APP-') ? c.applicationNo : '')).toLowerCase();
+        const customerCode = String(c.customerCode || '').toLowerCase();
+        const appId = String(c.appId || '').toLowerCase();
         const agentName = (c.agentName || '').toLowerCase();
         const rmName = (c.rmName || '').toLowerCase();
         const district = (c.districtName || '').toLowerCase();
-        const loanType = (c.loanType || c.loanPurpose || '').toLowerCase();
+        const loanProduct = (c.loanProductName || '').toLowerCase();
+        const loanPurpose = (c.loanPurpose || c.loanType || '').toLowerCase();
 
         const matchSearch =
           customerName.includes(term) ||
           mobile.includes(term) ||
-          appNo.includes(term) ||
+          customerCode.includes(term) ||
+          appId.includes(term) ||
           agentName.includes(term) ||
           rmName.includes(term) ||
           district.includes(term) ||
-          loanType.includes(term);
+          loanProduct.includes(term) ||
+          loanPurpose.includes(term);
 
         return matchSearch;
       })
@@ -354,18 +383,13 @@ export default function CustomerMonitoring() {
               <option value="All">All Statuses</option>
               {statusOptions.length > 0 ? (
                 statusOptions.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
+                  <option key={st.value} value={st.value}>
+                    {st.label}
                   </option>
                 ))
               ) : (
                 <>
-                  <option value="RM Pending">RM Pending</option>
-                  <option value="Logged to HO">Logged to HO</option>
-                  <option value="CM Pending">CM Pending</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Rejected">Rejected</option>
-                  <option value="Returned">Returned</option>
+                  <option value={STATUS_UNAVAILABLE_FILTER}>Status unavailable</option>
                 </>
               )}
             </select>
@@ -476,11 +500,11 @@ export default function CustomerMonitoring() {
                 </thead>
                 <tbody>
                   {paginatedCustomers.map((c, index) => {
-                    const statusInfo = getStatusInfo(c.status);
+                    const statusInfo = getStatusInfo(c);
                     const appliedDate = c.appliedDate || (c.createdAt ? String(c.createdAt).slice(0, 10) : '—');
                     const customerName = c.name || c.customerName || c.fullName || '—';
                     const mobile = c.mobile ? `+91 ${c.mobile}` : '—';
-                    const loanType = c.loanType || c.loanPurpose || 'Personal Loan';
+                    const loanProductName = c.loanProductName || 'N/A';
                     const amountVal = c.amount || c.expectedLoanAmount || c.loanAmount;
                     const agentName = c.agentName || '—';
                     const rmName = c.rmName || '—';
@@ -502,7 +526,7 @@ export default function CustomerMonitoring() {
                           </div>
                         </td>
                         <td>
-                          <span className="bo-loan-type-tag">{loanType}</span>
+                          <span className="bo-loan-type-tag">{loanProductName}</span>
                         </td>
                         <td>
                           <strong className="bo-amount-highlight">

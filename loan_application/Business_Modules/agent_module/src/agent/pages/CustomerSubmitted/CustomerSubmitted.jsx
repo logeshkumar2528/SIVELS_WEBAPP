@@ -20,6 +20,11 @@ function CustomerSubmitted({
   referenceId = 'REF2506051045',
   onAddAnother,
   onGoToHistory,
+  workflowStatus,
+  isSubmittedToRm = false,
+  submitting = false,
+  submissionError = null,
+  onSubmitToRm,
   autoCloseSeconds = 5,
 }) {
   const navigate = useNavigate()
@@ -27,6 +32,8 @@ function CustomerSubmitted({
 
   // 5-second auto countdown
   useEffect(() => {
+    if (!isSubmittedToRm) return undefined
+
     if (timeLeft <= 0) {
       if (onGoToHistory) {
         onGoToHistory()
@@ -41,7 +48,7 @@ function CustomerSubmitted({
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [timeLeft, navigate, onGoToHistory])
+  }, [timeLeft, navigate, onGoToHistory, isSubmittedToRm])
 
   const handleAddAnotherClick = () => {
     if (onAddAnother) {
@@ -59,7 +66,8 @@ function CustomerSubmitted({
     }
   }
 
-  const progressPercent = (timeLeft / autoCloseSeconds) * 100
+  const progressPercent = isSubmittedToRm ? (timeLeft / autoCloseSeconds) * 100 : 0
+  const workflowStatusName = workflowStatus?.workflowStatusName || 'Status unavailable'
 
   return (
     <div className="customer-submitted-overlay">
@@ -76,9 +84,13 @@ function CustomerSubmitted({
               <Check size={38} strokeWidth={3} />
             </div>
           </div>
-          <h2 className="success-title">Customer Submitted Successfully!</h2>
+          <h2 className="success-title">
+            {isSubmittedToRm ? 'Customer Submitted Successfully!' : 'Customer Created Successfully!'}
+          </h2>
           <p className="success-subtitle">
-            The customer details and documents have been submitted to RM.
+            {isSubmittedToRm
+              ? 'The customer details and documents have been submitted to RM.'
+              : 'The customer details and documents are saved. Submit the application to RM when ready.'}
           </p>
         </div>
 
@@ -133,7 +145,7 @@ function CustomerSubmitted({
               </div>
               <div>
                 <div className="details-label">Status</div>
-                <div className="status-text-value">Pending RM Review</div>
+                <div className="status-text-value">{workflowStatusName}</div>
               </div>
             </div>
           </div>
@@ -143,26 +155,55 @@ function CustomerSubmitted({
         <div className="info-alert-banner">
           <Info size={18} className="info-alert-icon" />
           <div className="info-alert-text">
-            Your application has been sent to RM. You will be notified once RM reviews the application. You can track the status in{' '}
-            <Link to="/Agent/submission-history">Submission History</Link>.
+            {isSubmittedToRm
+              ? <>Your application has been sent to RM. You will be notified once RM reviews the application. You can track the status in{' '}<Link to="/Agent/submission-history">Submission History</Link>.</>
+              : <>Customer creation and document upload are complete. Choose <strong>Submit to RM</strong> to start the RM verification workflow.</>}
           </div>
         </div>
 
-        {/* 5-Second Countdown Timer Bar */}
-        <div className="countdown-timer-bar">
-          <span className="timer-text">
-            Auto-navigating to Submission History in {timeLeft}s...
-          </span>
-          <div className="timer-progress-track">
-            <div
-              className="timer-progress-fill"
-              style={{ width: `${progressPercent}%` }}
-            />
+        {submissionError && !isSubmittedToRm && (
+          <div
+            role="alert"
+            style={{
+              marginTop: '12px',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: '1px solid #fecaca',
+              background: '#fef2f2',
+              color: '#b91c1c',
+              fontSize: '13px',
+            }}
+          >
+            {submissionError}
           </div>
-        </div>
+        )}
+
+        {isSubmittedToRm && (
+          <div className="countdown-timer-bar">
+            <span className="timer-text">
+              Auto-navigating to Submission History in {timeLeft}s...
+            </span>
+            <div className="timer-progress-track">
+              <div
+                className="timer-progress-fill"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="submitted-actions">
+          {!isSubmittedToRm && (
+            <button
+              type="button"
+              className="btn-history"
+              onClick={onSubmitToRm}
+              disabled={submitting}
+            >
+              {submitting ? 'Submitting to RM...' : 'Submit to RM'}
+            </button>
+          )}
           <button
             type="button"
             className="btn-history"

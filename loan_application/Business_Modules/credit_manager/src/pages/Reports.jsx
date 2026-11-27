@@ -4,9 +4,14 @@ import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import '../../../back_office/src/back-office/pages/Dashboard/Dashboard.css';
 import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit.css';
 import '../styles/creditManager.css';
-import { CM_STATUS, CM_STATUS_META } from '../mappers/creditMapper';
+import {
+  CM_STATUS,
+  CREDIT_MANAGER_APPROVED_WORKFLOW_CODES,
+  CREDIT_MANAGER_PENDING_WORKFLOW_CODES,
+  CREDIT_MANAGER_REJECTED_WORKFLOW_CODES,
+} from '../mappers/creditMapper';
 import { useCreditApplications } from '../context/CreditApplicationsContext';
-import { formatCurrency, parseDate } from '../utils/formatters';
+import { formatCurrency, parseDate, summarizeAmount } from '../utils/formatters';
 
 function isWithinRange(value, fromDate, toDate) {
   if (!fromDate && !toDate) return true;
@@ -17,11 +22,16 @@ function isWithinRange(value, fromDate, toDate) {
   return true;
 }
 
-function sumAmount(list) {
-  return list.reduce((total, app) => total + (Number(app.expectedLoanAmount) || 0), 0);
+function formatAggregate(summary, suffix = '') {
+  if (!summary.complete) return 'Amount unavailable';
+  return `${formatCurrency(summary.total)}${suffix ? ` ${suffix}` : ''}`;
 }
 
-const REPORT_STATUSES = [CM_STATUS.PENDING, CM_STATUS.APPROVED, CM_STATUS.REJECTED];
+const REPORT_STATUSES = [
+  ...CREDIT_MANAGER_PENDING_WORKFLOW_CODES.map((code) => ({ code, legacyStatus: CM_STATUS.PENDING, fallbackLabel: 'Status unavailable', color: '#f59e0b' })),
+  ...CREDIT_MANAGER_APPROVED_WORKFLOW_CODES.map((code) => ({ code, legacyStatus: CM_STATUS.APPROVED, fallbackLabel: 'Status unavailable', color: '#0F7A4C' })),
+  ...CREDIT_MANAGER_REJECTED_WORKFLOW_CODES.map((code) => ({ code, legacyStatus: CM_STATUS.REJECTED, fallbackLabel: 'Status unavailable', color: '#dc2626' })),
+];
 
 export default function Reports() {
   const { applications, loading, error, refetch } = useCreditApplications();
@@ -42,22 +52,42 @@ export default function Reports() {
     [applications, fromDate, toDate]
   );
 
+  const totalRequestedAmount = useMemo(
+    () => summarizeAmount(inRange, 'expectedLoanAmount'),
+    [inRange]
+  );
+
+  const approvedAmount = useMemo(
+    () => summarizeAmount(
+      inRange.filter((app) => app.workflowStatusCode
+        ? CREDIT_MANAGER_APPROVED_WORKFLOW_CODES.includes(app.workflowStatusCode)
+        : app.status === CM_STATUS.APPROVED),
+      'sanctionedLoanAmount'
+    ),
+    [inRange]
+  );
+
   const rows = useMemo(() => {
     const total = inRange.length;
     return REPORT_STATUSES.map((status) => {
-      const list = inRange.filter((app) => app.status === status);
+      const list = inRange.filter((app) => app.workflowStatusCode
+        ? app.workflowStatusCode === status.code
+        : app.status === status.legacyStatus);
       return {
-        status,
-        label: CM_STATUS_META[status].label,
-        color: CM_STATUS_META[status].color,
+        status: status.code,
+        label: list.find((app) => app.workflowStatusName)?.workflowStatusName || status.fallbackLabel,
+        color: status.color,
         count: list.length,
-        amount: sumAmount(list),
+        requestedAmount: summarizeAmount(list, 'expectedLoanAmount').total,
+        sanctionedAmount: summarizeAmount(list, 'sanctionedLoanAmount').total,
         percentage: total ? Math.round((list.length / total) * 10000) / 100 : 0,
       };
     });
   }, [inRange]);
 
-  const countFor = (status) => rows.find((row) => row.status === status)?.count ?? 0;
+  const countFor = (legacyStatus) => rows
+    .filter((row) => REPORT_STATUSES.find((status) => status.code === row.status)?.legacyStatus === legacyStatus)
+    .reduce((total, row) => total + row.count, 0);
 
   return (
     <div className="bo-dashboard">
@@ -124,10 +154,10 @@ export default function Reports() {
       <section className="bo-kpi-grid" aria-label="Report Overview">
         <StatCard
           icon={FileTextIcon && <FileTextIcon size={22} strokeWidth={1.8} />}
-          title="Total Received"
+          title="Total Applications"
           value={inRange.length}
           description="Applications in selected period"
-          trend={`${formatCurrency(sumAmount(inRange))} Total Value`}
+          trend={formatAggregate(totalRequestedAmount, 'Total Requested Amount')}
           variant="default"
           loading={loading}
         />
@@ -144,6 +174,7 @@ export default function Reports() {
           title="Approved"
           value={countFor(CM_STATUS.APPROVED)}
           description="Credit approved"
+          trend={formatAggregate(approvedAmount, 'Sanctioned')}
           trendDirection="up"
           variant="success"
           loading={loading}
@@ -179,7 +210,8 @@ export default function Reports() {
                 <tr>
                   <th>Status</th>
                   <th>Applications</th>
-                  <th>Loan Value</th>
+                  <th>Requested Loan Amount</th>
+                  <th>Sanctioned Amount</th>
                   <th style={{ width: '40%' }}>Share of Received</th>
                 </tr>
               </thead>
@@ -187,10 +219,11 @@ export default function Reports() {
                 {rows.map((row) => (
                   <tr key={row.status}>
                     <td>
-                      <span className={`stc-pill ${CM_STATUS_META[row.status].className}`}>{row.label}</span>
+                      <span className={`stc-pill ${row.status === 'APPLICATION_REJECTED' ? 'cm-pill--rejected' : row.status === 'CREDIT_APPROVED_MAKER_PENDING' ? 'stc-pill--verified' : 'stc-pill--pending'}`}>{row.label}</span>
                     </td>
                     <td><strong>{row.count}</strong></td>
-                    <td><span className="stc-amount-cell">{formatCurrency(row.amount)}</span></td>
+                    <td><span className="stc-amount-cell">{formatCurrency(row.requestedAmount)}</span></td>
+                    <td><span className="stc-amount-cell">{formatCurrency(row.sanctionedAmount)}</span></td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ minWidth: 56, fontWeight: 600 }}>{row.percentage}%</span>

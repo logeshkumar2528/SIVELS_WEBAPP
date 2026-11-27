@@ -10,7 +10,6 @@ import iconMap from '../../../back_office/src/back-office/config/iconMap';
 import Pagination from '../../../back_office/src/back-office/components/Pagination/Pagination';
 import '../../../back_office/src/back-office/pages/SubmitToCredit/SubmitToCredit.css';
 import '../styles/creditManager.css';
-import { CM_STATUS_META } from '../mappers/creditMapper';
 import { getApplicationNo, parseDate } from '../utils/formatters';
 
 function uniqueSorted(values) {
@@ -26,7 +25,7 @@ function isWithinRange(value, fromDate, toDate) {
   return true;
 }
 
-export function StatusPill({ status, escalation = null }) {
+export function StatusPill({ status: _legacyStatus, workflowStatusCode, workflowStatusName, escalation = null }) {
   if (escalation) {
     return (
       <span
@@ -37,9 +36,15 @@ export function StatusPill({ status, escalation = null }) {
       </span>
     );
   }
-  const meta = CM_STATUS_META[status];
-  if (!meta) return <span className="stc-pill stc-pill--pending">—</span>;
-  return <span className={`stc-pill ${meta.className}`}>{meta.label}</span>;
+  if (workflowStatusName) {
+    const className = workflowStatusCode === 'APPLICATION_REJECTED'
+      ? 'cm-pill--rejected'
+      : workflowStatusCode === 'CREDIT_APPROVED_MAKER_PENDING'
+        ? 'stc-pill--verified'
+        : 'stc-pill--pending';
+    return <span className={`stc-pill ${className}`}>{workflowStatusName}</span>;
+  }
+  return <span className="stc-pill stc-pill--pending">Status unavailable</span>;
 }
 
 /**
@@ -78,6 +83,15 @@ export default function ApplicationQueue({
 
   const districtOptions = useMemo(() => uniqueSorted(applications.map((a) => a.districtName)), [applications]);
   const rmOptions = useMemo(() => uniqueSorted(applications.map((a) => a.rmName)), [applications]);
+  const workflowStatusFilters = useMemo(() => {
+    const statuses = new Map();
+    applications.forEach((app) => {
+      if (app.workflowStatusCode && app.workflowStatusName) {
+        statuses.set(app.workflowStatusCode, app.workflowStatusName);
+      }
+    });
+    return [...statuses.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [applications]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -89,7 +103,7 @@ export default function ApplicationQueue({
       if (!isWithinRange(app[dateField], fromDate, toDate)) return false;
       if (districtFilter !== 'All' && app.districtName !== districtFilter) return false;
       if (rmFilter !== 'All' && app.rmName !== rmFilter) return false;
-      if (statusFilter !== 'All' && String(app.status) !== statusFilter) return false;
+      if (statusFilter !== 'All' && String(app.workflowStatusCode || app.status) !== statusFilter) return false;
       if (!term) return true;
       return (
         String(app.customerName || '').toLowerCase().includes(term) ||
@@ -175,8 +189,8 @@ export default function ApplicationQueue({
                 aria-label="Filter by Status"
               >
                 <option value="All">All Statuses</option>
-                {Object.entries(CM_STATUS_META).map(([status, meta]) => (
-                  <option key={status} value={status}>{meta.label}</option>
+                {workflowStatusFilters.map(([code, label]) => (
+                  <option key={code} value={code}>{label}</option>
                 ))}
               </select>
             </div>

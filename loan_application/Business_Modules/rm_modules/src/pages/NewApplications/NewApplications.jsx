@@ -19,7 +19,6 @@ import {
   buildAllowedAgentIdSet,
   filterAgentsForRm,
   getCurrentRMContext,
-  normalizeApplicationStatus,
   resolveApiArray,
 } from '../../utils/rmContext';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
@@ -35,7 +34,15 @@ import {
   uploadCorrectionForRejection,
 } from '../../../../../Core/src/services/customerDocumentService';
 import { readApiError } from '../../../../../Core/src/utils/documentFileActions';
+import { extractApiErrorMessage } from '../../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 import ReturnedDocumentDetails from './ReturnedDocumentDetails';
+import {
+  RM_WORKFLOW_CODES,
+  getRmWorkflowStatusLabel,
+  isRmDownstreamStatus,
+  matchesRmStatusFilter,
+} from '../../utils/rmWorkflowStatus';
 
 const API_BASE = API_BASE_URL;
 
@@ -277,22 +284,8 @@ function correlateApplicationProduct(item, appProdList = [], ownership = {}, cur
 const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejections = [], matchedProduct = null, loanProductsById = {}) => {
   const applicationId = item.applicationId || item.applicationNumber || item.agentCustomerId || item.customerId || `${index + 1}`;
   const ownership = resolveApplicationOwnership(item, agentsById, rmsById);
-  const rawStatusNum = Number(item.status ?? item.Status);
-  let normalizedStatus = normalizeApplicationStatus(item.status, item.statusName || item.StatusName);
-  if (Number.isFinite(rawStatusNum)) {
-    if (rawStatusNum === 2) normalizedStatus = 'Logged to HO';
-    else if (rawStatusNum === 3) normalizedStatus = 'Under Review';
-    else if (rawStatusNum === 4) normalizedStatus = 'Approved';
-    else if (rawStatusNum === 5) normalizedStatus = 'Rejected';
-    else if (rawStatusNum === 6) normalizedStatus = 'Returned';
-  }
-
-  if (rejections && rejections.length > 0) {
-    const hasActiveReturn = rejections.some((r) => r.status === 'ReturnedToRM');
-    if (hasActiveReturn) {
-      normalizedStatus = 'Returned';
-    }
-  }
+  const workflowStatus = extractWorkflowStatus(item);
+  const legacyStatus = workflowStatus.legacyStatus;
 
   const officialAppId = item.appId || item.AppId || item.App_Id || null;
   const rawCustomerCode = item.customerCode || item.CustomerCode || '';
@@ -431,9 +424,12 @@ const mapBackendApplication = (item, index, agentsById = {}, rmsById = {}, rejec
     createdDate: formatDate(item.createdAt || item.createdDate),
     createdAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || null,
     rawCreatedAt: item.createdAt || item.createdDate || item.CreatedAt || item.CreatedDate || item.submittedAt || item.SubmittedAt || null,
-    rawStatusCode: Number(item.status ?? item.Status ?? 0),
-    status: normalizedStatus,
-    rawStatus: Number(item.status ?? item.Status ?? 0) || normalizedStatus,
+    workflowStatus,
+    workflowStatusCode: workflowStatus.workflowStatusCode,
+    workflowStatusName: workflowStatus.workflowStatusName,
+    rawStatusCode: legacyStatus,
+    status: getRmWorkflowStatusLabel(workflowStatus),
+    rawStatus: legacyStatus,
     agentCustomerId: item.agentCustomerId || item.customerId || null,
     applicationProductDetailsId:
       matchedProduct?.applicationProductDetailsId ||
@@ -463,6 +459,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
   const [pageSize, setPageSize] = useState(7);
   const [applications, setApplications] = useState([]);
   const [verificationStatusByApp, setVerificationStatusByApp] = useState({});
+  const [verifyingId, setVerifyingId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorPopup, setErrorPopup] = useState('');
   const pageSizeOptions = [7, 10, 15, 20];
@@ -663,9 +660,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       });
 
       // Fetch Back Office Step Verification records ONLY for Logged to HO applications
-      const loggedToHoApps = mapped.filter(
-        (a) => a.status === 'Logged to HO' || a.rawStatus === 2 || a.rawStatus === '2'
-      );
+      const loggedToHoApps = mapped.filter((a) => isRmDownstreamStatus(a.workflowStatus));
 
       if (loggedToHoApps.length > 0) {
         const verifResults = await Promise.allSettled(
@@ -1093,14 +1088,13 @@ export default function NewApplications({ initialFilter = 'All' }) {
           app.id.toLowerCase().includes(searchLower) ||
           app.mobile.includes(searchTrimmed);
 
-        const appStatusCode = Number(app.rawStatusCode ?? app.rawStatus);
-        const isHoSubmitted = Number.isFinite(appStatusCode) && (appStatusCode === 2 || appStatusCode === 3 || appStatusCode === 4 || appStatusCode === 5 || appStatusCode === 6);
+        const isHoSubmitted = isRmDownstreamStatus(app.workflowStatus);
         if (isLoggedToHoRoute && !isHoSubmitted) return false;
 
         const matchesStatus =
           statusFilter === 'All'
             ? (isLoggedToHoRoute ? isHoSubmitted : true)
-            : app.status === statusFilter;
+            : matchesRmStatusFilter(app.workflowStatus, statusFilter);
         return matchesSearch && matchesStatus;
       })
       .sort((a, b) => {
@@ -1130,14 +1124,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
   }, [filteredData, currentPage, pageSize]);
 
   const getCanEdit = useCallback((row) => {
-    // Only status 2 / 'Logged to HO' can ever be edited
-    const isLoggedToHo = row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2';
+    // Only BO verification pending / legacy status 2 can ever be edited.
+    const isLoggedToHo =
+      row.workflowStatusCode === RM_WORKFLOW_CODES.BO_PENDING ||
+      row.rawStatus === 2 ||
+      row.rawStatus === '2';
     if (!isLoggedToHo) return false;
 
-    // Status >= 3 is always hidden
-    const numStatus = Number(row.rawStatus ?? row.status);
-    if (!isNaN(numStatus) && numStatus >= 3) return false;
-    if (row.status === 'Under Review' || row.status === 'Approved' || row.status === 'Rejected') return false;
+    if (row.workflowStatusCode && row.workflowStatusCode !== RM_WORKFLOW_CODES.BO_PENDING) return false;
 
     // If applicationProductDetailsId is missing, cannot verify -> fail closed (hide edit)
     const appProdId = row.applicationProductDetailsId;
@@ -1152,6 +1146,55 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
     return true;
   }, [verificationStatusByApp]);
+
+  const handleVerifyNow = async (row) => {
+    const applicationId = row.agentCustomerId || row.id;
+    const workflowCode = row.workflowStatus?.workflowStatusCode;
+    const applicationDetailsRoute = ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId);
+
+    if (workflowCode === RM_WORKFLOW_CODES.RM_IN_PROGRESS) {
+      navigate(applicationDetailsRoute, applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined);
+      return;
+    }
+
+    if (workflowCode !== RM_WORKFLOW_CODES.RM_PENDING || verifyingId === String(applicationId)) {
+      if (workflowCode !== RM_WORKFLOW_CODES.RM_PENDING) {
+        navigate(applicationDetailsRoute, applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined);
+      }
+      return;
+    }
+
+    const rmContext = getCurrentRMContext();
+    const performedByUserId = Number(rmContext?.rmId);
+    if (!Number.isFinite(performedByUserId) || performedByUserId <= 0) {
+      setErrorPopup('Unable to identify the authenticated RM. Please sign in again.');
+      return;
+    }
+
+    setVerifyingId(String(applicationId));
+    setErrorPopup('');
+    try {
+      const transitionResponse = await rmCustomerService.startRmVerification(applicationId, {
+        performedByUserId,
+        performedByRole: 'RM',
+        remarks: null,
+      });
+      const latestRecord = await rmCustomerService.getCustomerById(applicationId);
+      const confirmedStatus = extractWorkflowStatus(latestRecord || transitionResponse);
+      if (
+        confirmedStatus.workflowStatusCode !== RM_WORKFLOW_CODES.RM_IN_PROGRESS ||
+        (confirmedStatus.legacyStatus !== null && Number(confirmedStatus.legacyStatus) !== 1)
+      ) {
+        throw new Error('RM verification could not be confirmed by the server. Please refresh and try again.');
+      }
+      await loadApplications();
+      navigate(applicationDetailsRoute, applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined);
+    } catch (error) {
+      setErrorPopup(extractApiErrorMessage(error, 'Unable to start RM verification. Please try again.'));
+    } finally {
+      setVerifyingId(null);
+    }
+  };
 
   const columns = [
     { key: 'sno', label: 'S.NO' },
@@ -1187,8 +1230,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       render: (row) => (
         <div className="new-apps-status-cell">
           <StatusBadge
-            status={row.status}
-            label={row.status}
+            workflowStatus={row.workflowStatus}
           />
         </div>
       ),
@@ -1199,9 +1241,11 @@ export default function NewApplications({ initialFilter = 'All' }) {
       render: (row) => {
         const applicationId = row.agentCustomerId || row.id;
 
-        if (row.status === 'Returned') {
-          const isAppLevelReturn = Number(row.rawStatusCode ?? row.rawStatus) === 6;
-          const hasDocRejections = Array.isArray(row.rejections) && row.rejections.length > 0;
+        const hasDocRejections = Array.isArray(row.rejections) && row.rejections.length > 0;
+        const isLegacyAppLevelReturn =
+          !row.workflowStatusCode && Number(row.rawStatusCode ?? row.rawStatus) === 6;
+        if (row.workflowStatusCode === RM_WORKFLOW_CODES.RETURNED_TO_RM || isLegacyAppLevelReturn || hasDocRejections) {
+          const isAppLevelReturn = row.workflowStatusCode === RM_WORKFLOW_CODES.RETURNED_TO_RM || isLegacyAppLevelReturn;
 
           // CASE B: raw status === 6 AND no document rejections
           if (isAppLevelReturn && !hasDocRejections) {
@@ -1267,9 +1311,8 @@ export default function NewApplications({ initialFilter = 'All' }) {
           );
         }
 
-        const rowStatusCode = Number(row.rawStatusCode ?? row.rawStatus);
-        const isCompletedHoStatus = isLoggedToHoRoute && (rowStatusCode === 3 || rowStatusCode === 4 || rowStatusCode === 5 || rowStatusCode === 6);
-        if (row.status === 'Logged to HO' || row.rawStatus === 2 || row.rawStatus === '2' || isCompletedHoStatus) {
+        const isDownstream = isRmDownstreamStatus(row.workflowStatus);
+        if (isDownstream || row.rawStatus === 2 || row.rawStatus === '2') {
           const canEdit = getCanEdit(row);
           return (
             <div className="new-apps-actions-cell" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -1321,40 +1364,10 @@ export default function NewApplications({ initialFilter = 'All' }) {
             <Button
               size="sm"
               variant="primary"
-              onClick={async () => {
-                if (row.status === 'New') {
-                  try {
-                    const getRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`);
-                    if (getRes.ok) {
-                      const data = await getRes.json();
-                      const cust = Array.isArray(data) ? data[0] : (data?.value ? data.value[0] : data);
-                      if (cust && Number(cust.status ?? cust.Status ?? 0) === 0) {
-                        const payload = {
-                          ...cust,
-                          status: 1,
-                        };
-                        const putRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${applicationId}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload),
-                        });
-                        if (!putRes.ok && putRes.status !== 204) {
-                          console.error(`Failed to update status to Pending (${putRes.status})`);
-                        }
-                      }
-                    }
-                  } catch (err) {
-                    console.error('Failed to update status to Pending:', err);
-                  }
-                }
-                const applicationDetailsRoute = ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId);
-                navigate(
-                  applicationDetailsRoute,
-                  applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined
-                );
-              }}
+              onClick={() => handleVerifyNow(row)}
+              disabled={verifyingId === String(applicationId)}
             >
-              Verify Now
+              {row.workflowStatusCode === RM_WORKFLOW_CODES.RM_IN_PROGRESS ? 'Resume Verification' : 'Verify Now'}
             </Button>
           </div>
         );
@@ -1527,7 +1540,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
               <div className="return-modal-cust-name">{selectedReturnApp.customerName}</div>
               <div className="return-modal-app-id">Application #{selectedReturnApp.displayId} • {selectedReturnApp.mobile}</div>
             </div>
-            <StatusBadge status="Returned" />
+            <StatusBadge workflowStatus={selectedReturnApp.workflowStatus} />
           </div>
 
           <div className="return-rejections-list">

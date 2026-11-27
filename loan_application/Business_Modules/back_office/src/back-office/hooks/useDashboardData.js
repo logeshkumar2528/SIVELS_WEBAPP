@@ -24,6 +24,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import backOfficeService from '../api/backOfficeService';
 import { mapDistrict, mapRM, mapAgent, mapCustomer } from '../mappers/hierarchyMapper';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 
 /**
  * Normalizes backend status values into standard Sivels statuses.
@@ -161,7 +162,17 @@ export function useDashboardData() {
         const raw = Array.isArray(customersRes.value)
           ? customersRes.value
           : (customersRes.value?.value || customersRes.value?.data || []);
-        mappedCustomers = raw.map(mapCustomer).filter(Boolean);
+        mappedCustomers = raw.map((record) => {
+          const customer = mapCustomer(record);
+          if (!customer) return null;
+          const workflowStatus = extractWorkflowStatus(record);
+          return {
+            ...customer,
+            workflowStatus,
+            workflowStatusCode: workflowStatus.workflowStatusCode,
+            workflowStatusName: workflowStatus.workflowStatusName,
+          };
+        }).filter(Boolean);
       }
 
       // If customer applications API explicitly failed and all others failed, report meaningful error
@@ -293,7 +304,16 @@ export function useDashboardData() {
       let pendingPipelineAmount = 0;
 
       mappedCustomers.forEach((customer) => {
-        const normStatus = normalizeStatus(customer.status);
+        const workflowCode = customer.workflowStatusCode;
+        const normStatus = workflowCode
+          ? workflowCode === 'CREDIT_APPROVED_MAKER_PENDING'
+            ? 'Approved'
+            : workflowCode === 'APPLICATION_REJECTED'
+              ? 'Rejected'
+              : workflowCode.includes('IN_PROGRESS')
+                ? 'In Progress'
+                : 'Pending'
+          : normalizeStatus(customer.status);
         const amount = getLoanAmount(customer);
 
         if (normStatus === 'Approved') {

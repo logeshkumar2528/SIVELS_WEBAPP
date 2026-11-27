@@ -8,10 +8,21 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import creditManagerService from '../api/creditManagerService';
 import backOfficeService from '../../../back_office/src/back-office/api/backOfficeService';
-import { isCreditManagerAuthenticated } from '../auth/authStorage';
+import { getCreditManagerSessionKey, isCreditManagerAuthenticated } from '../auth/authStorage';
 import { mapAgent, mapRM } from '../../../back_office/src/back-office/mappers/hierarchyMapper';
-import { CM_STATUS, isCreditManagerStatus, mapCreditApplication } from '../mappers/creditMapper';
+import {
+  CM_STATUS,
+  isCreditManagerApprovedWorkflow,
+  isCreditManagerIncomingWorkflow,
+  isCreditManagerPendingWorkflow,
+  isCreditManagerReviewWorkflow,
+  isCreditManagerRejectedWorkflow,
+  isCreditManagerStatus,
+  isCreditManagerWorkflowCode,
+  mapCreditApplication,
+} from '../mappers/creditMapper';
 import { parseDate } from '../utils/formatters';
+import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
 
 const CreditApplicationsContext = createContext(null);
 
@@ -22,12 +33,36 @@ function sortNewestFirst(a, b) {
   return (Number(b.agentCustomerId) || 0) - (Number(a.agentCustomerId) || 0);
 }
 
+function uniqueApplications(list) {
+  const seen = new Set();
+  return list.filter((app) => {
+    const id = app.agentCustomerId ?? app.id;
+    if (id === null || id === undefined) return true;
+    const key = String(id);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function CreditApplicationsProvider({ children }) {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sessionKey, setSessionKey] = useState(() => getCreditManagerSessionKey());
+
+  useEffect(() => {
+    const syncSession = () => setSessionKey(getCreditManagerSessionKey());
+    window.addEventListener('storage', syncSession);
+    window.addEventListener('sivels:permissions-changed', syncSession);
+    return () => {
+      window.removeEventListener('storage', syncSession);
+      window.removeEventListener('sivels:permissions-changed', syncSession);
+    };
+  }, []);
 
   const load = useCallback(async (isActive = () => true) => {
+    const requestSessionKey = sessionKey;
     if (!isCreditManagerAuthenticated()) {
       setLoading(false);
       return;
@@ -60,11 +95,17 @@ export function CreditApplicationsProvider({ children }) {
       const rmById = new Map(rms.map((rm) => [String(rm.rmId || rm.id), rm]));
       const agentById = new Map(agents.map((agent) => [String(agent.agentId || agent.id), agent]));
 
-      const mapped = raw
+      const mapped = uniqueApplications(raw
         .map((app) => mapCreditApplication(app, agentById, rmById))
-        .filter((app) => app && isCreditManagerStatus(app.status))
-        .sort(sortNewestFirst);
-      if (isActive()) setApplications(mapped);
+        .filter((app) => {
+          if (!app) return false;
+          const code = app.workflowStatusCode || extractWorkflowStatus(app).workflowStatusCode;
+          if (!code) return isCreditManagerStatus(app.status);
+          return isCreditManagerWorkflowCode(code);
+        })
+      ).sort(sortNewestFirst);
+      if (isActive() && getCreditManagerSessionKey() === requestSessionKey) setApplications(mapped);
+      return mapped;
     } catch (err) {
       if (isActive()) {
         setError(err?.response?.data?.message || err?.message || 'Failed to load applications.');
@@ -72,33 +113,49 @@ export function CreditApplicationsProvider({ children }) {
     } finally {
       if (isActive()) setLoading(false);
     }
-  }, []);
+  }, [sessionKey]);
 
   useEffect(() => {
     let active = true;
+    setApplications([]);
+    setError(null);
     load(() => active);
     return () => {
       active = false;
     };
-  }, [load]);
+  }, [load, sessionKey]);
 
   const value = useMemo(() => {
-    const byStatus = (status) => applications.filter((app) => app.status === status);
-    const pending = byStatus(CM_STATUS.PENDING);
-    const approved = byStatus(CM_STATUS.APPROVED);
-    const rejected = byStatus(CM_STATUS.REJECTED);
-    const escalated = pending.filter((app) => app.pendingEscalation?.canCurrentUserApprove);
-    const waiting = pending.filter((app) => app.pendingEscalation?.isWaitingForAnotherRole);
+    const pendingWorkflowApplications = applications.filter((app) => (
+      app.workflowStatusCode
+        ? isCreditManagerPendingWorkflow(app.workflowStatusCode)
+        : app.status === CM_STATUS.PENDING
+    ));
+    const received = applications.filter((app) => (
+      isCreditManagerIncomingWorkflow(app.workflowStatusCode) && !app.pendingEscalation
+    ));
+    const pending = applications.filter((app) => (
+      isCreditManagerReviewWorkflow(app.workflowStatusCode) && !app.pendingEscalation
+    ));
+    const approved = applications.filter((app) => (
+      app.workflowStatusCode ? isCreditManagerApprovedWorkflow(app.workflowStatusCode) : app.status === CM_STATUS.APPROVED
+    ));
+    const rejected = applications.filter((app) => (
+      app.workflowStatusCode ? isCreditManagerRejectedWorkflow(app.workflowStatusCode) : app.status === CM_STATUS.REJECTED
+    ));
+    const escalated = pendingWorkflowApplications.filter((app) => app.pendingEscalation?.canCurrentUserApprove);
+    const waiting = pendingWorkflowApplications.filter((app) => app.pendingEscalation?.isWaitingForAnotherRole);
 
     return {
       applications,
+      received,
       pending,
       approved,
       rejected,
       escalated,
       waiting,
       counts: {
-        received: applications.length,
+        received: received.length,
         pending: pending.length,
         approved: approved.length,
         rejected: rejected.length,

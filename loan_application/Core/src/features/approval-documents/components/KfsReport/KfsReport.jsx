@@ -39,6 +39,7 @@ const RESET_PERIODICITY_MONTHS = 3;
 const SCHEDULE_FIRST_PAGE_ROWS = 14;
 const SCHEDULE_ROWS_PER_PAGE = 44;
 const NIL = 'NIL';
+const EMPTY_OPERATIONS_DETAILS = [];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -103,12 +104,15 @@ function KfsPage({ children }) {
   );
 }
 
-function ScheduleTable({ rows, totalRows = rows, showTotals = false }) {
-  const totals = totalRows.reduce((sum, row) => ({
+function ScheduleTable({ rows, totalRows = rows, totalSummary = null, showTotals = false }) {
+  const totals = totalSummary || totalRows.reduce((sum, row) => ({
     interest: sum.interest + Number(row.interest || 0),
     principal: sum.principal + Number(row.principal || 0),
     emi: sum.emi + Number(row.emi || 0),
   }), { interest: 0, principal: 0, emi: 0 });
+  const formatTotal = (value) => totalSummary
+    ? (value == null ? NIL : fmtINR(value))
+    : value.toLocaleString('en-IN');
   return (
     <table className="kfs-table kfs-schedule">
       <thead>
@@ -141,9 +145,9 @@ function ScheduleTable({ rows, totalRows = rows, showTotals = false }) {
         <tfoot>
           <tr>
             <th colSpan={2}>Total</th>
-            <th>{totals.interest.toLocaleString('en-IN')}</th>
-            <th>{totals.principal.toLocaleString('en-IN')}</th>
-            <th>{totals.emi.toLocaleString('en-IN')}</th>
+            <th>{formatTotal(totals.interest)}</th>
+            <th>{formatTotal(totals.principal)}</th>
+            <th>{formatTotal(totals.emi)}</th>
             <th>—</th>
           </tr>
         </tfoot>
@@ -181,12 +185,19 @@ export default function KfsReport({
   loanIdentifier = null,
   onGenerateIdentifier = null,
   isGeneratingIdentifier = false,
+  operationsData = null,
+  onPdfPersisted = null,
 }) {
+  const isOperationsMode = Boolean(operationsData);
   const reportRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({});
 
   useEffect(() => {
+    if (isOperationsMode) {
+      return undefined;
+    }
+
     const appProdId = Number(applicationProductDetailsId);
     const custId = Number(agentCustomerId) > 0 ? Number(agentCustomerId) : null;
     let isMounted = true;
@@ -226,7 +237,7 @@ export default function KfsReport({
     return () => {
       isMounted = false;
     };
-  }, [applicationProductDetailsId, agentCustomerId]);
+  }, [applicationProductDetailsId, agentCustomerId, isOperationsMode]);
 
   /* ── Loan terms ──────────────────────────────────────────────────── */
 
@@ -235,13 +246,81 @@ export default function KfsReport({
   const productWrapper = firstRecord(raw.productDetails || raw.productDetailsList || raw.ProductDetails) || {};
   const productRecord = productWrapper.product || productWrapper;
 
-  const decision = creditDecisionProp || data.creditDecision;
+  const decision = operationsData?.decision || creditDecisionProp || data.creditDecision;
   const decisionStatus = String(pick(decision, ['decision', 'Decision']) || '').trim();
   const isApproved = decisionStatus.toLowerCase() === 'approved';
 
   const approvedAmount = isApproved ? toNumber(pick(decision, ['sanctionedLoanAmount', 'SanctionedLoanAmount'])) : null;
   const approvedRoi = isApproved ? toNumber(pick(decision, ['sanctionedROI', 'SanctionedROI', 'sanctionedRoi'])) : null;
   const approvedTenure = isApproved ? toNumber(pick(decision, ['sanctionedTenureMonths', 'SanctionedTenureMonths'])) : null;
+
+  const operationsSchedule = operationsData?.schedule || null;
+  const operationsRepaymentRows = Array.isArray(operationsData?.repaymentRows)
+    ? operationsData.repaymentRows
+    : EMPTY_OPERATIONS_DETAILS;
+  const operationsRepaymentTotals = operationsData?.repaymentTotals || null;
+  const operationsScheduleTotalSummary = operationsRepaymentTotals || { interest: null, principal: null, emi: null };
+  const operationsFees = operationsData?.fees || null;
+  const operationsSchedulePrincipal = isOperationsMode
+    ? toNumber(pick(operationsSchedule, ['loanAmount', 'LoanAmount']))
+    : null;
+  const operationsRateFraction = isOperationsMode
+    ? toNumber(pick(operationsSchedule, ['interestRatePa', 'InterestRatePa']))
+    : null;
+  const operationsRate = operationsRateFraction == null ? null : operationsRateFraction * 100;
+  const operationsTenure = isOperationsMode
+    ? toNumber(pick(operationsSchedule, ['tenureMonths', 'TenureMonths']))
+    : null;
+  const operationsFirstDueDate = isOperationsMode
+    ? pick(operationsSchedule, ['firstEmiDate', 'FirstEmiDate'])
+    : null;
+  const operationsInterest = isOperationsMode
+    ? toNumber(pick(operationsSchedule, ['totalInterestInclBpi', 'TotalInterestInclBpi']))
+    : null;
+  const operationsFeesHeader = operationsFees?.header || operationsFees?.Header || {};
+  const operationsFeeLines = Array.isArray(operationsFees?.lines)
+    ? operationsFees.lines
+    : Array.isArray(operationsFees?.Lines)
+      ? operationsFees.Lines
+      : [];
+  const operationsFeeAmount = (line) => toNumber(
+    pick(line, ['totalNet', 'TotNet', 'actualFee', 'ActualFee', 'calculatedFee', 'CalculatedFee'])
+  );
+  const operationsFeeByName = (pattern) => operationsFeeLines
+    .filter((line) => pattern.test(String(pick(line, ['feeName', 'FeeName']) || '')))
+    .map(operationsFeeAmount)
+    .find((value) => value != null) ?? null;
+  const operationsProcessingFee = isOperationsMode ? operationsFeeByName(/processing/i) : null;
+  const operationsDocumentationFee = isOperationsMode ? operationsFeeByName(/login|documentation/i) : null;
+  const operationsInsuranceAmount = isOperationsMode ? operationsFeeByName(/insurance|accident/i) : null;
+  const operationsFeesToLender = isOperationsMode
+    ? toNumber(
+      pick(
+        operationsData?.fees,
+        ['totalApplicableFeeDeduction', 'TotalApplicableFeeDeduction']
+      )
+      ?? pick(operationsFeesHeader, ['totalTotNet', 'TotalTotNet'])
+    )
+    : null;
+  const operationsNetDisbursed = isOperationsMode
+    ? toNumber(pick(operationsData?.fees, ['finalNetDisbursementAmount', 'FinalNetDisbursementAmount']))
+    : null;
+  const operationsScheduleRows = useMemo(
+    () => isOperationsMode
+      ? operationsRepaymentRows.map((row, index) => ({
+        installment: row.installment ?? index + 1,
+        date: row.date,
+        rawInterestAmount: row.rawInterestAmount,
+        rawPrincipalAmount: row.rawPrincipalAmount,
+        rawEmiAmount: row.rawEmiAmount,
+        interest: nil(fmtINR(row.rawInterestAmount)),
+        principal: nil(fmtINR(row.rawPrincipalAmount)),
+        emi: nil(fmtINR(row.rawEmiAmount)),
+        closing: nil(fmtINR(row.rawClosingBalance)),
+      }))
+      : [],
+    [isOperationsMode, operationsRepaymentRows]
+  );
 
   const isCompleteApproved =
     isApproved &&
@@ -260,10 +339,14 @@ export default function KfsReport({
     return (current.length ? current : list)[0] || null;
   }, [data.assessments]);
 
-  const principal = isCompleteApproved ? approvedAmount : null;
-  const rate = isCompleteApproved ? approvedRoi : null;
-  const tenure = isCompleteApproved ? approvedTenure : null;
-  const sanctionDate = isCompleteApproved
+  const principal = isOperationsMode ? operationsSchedulePrincipal : (isCompleteApproved ? approvedAmount : null);
+  const sanctionedAmount = isOperationsMode ? approvedAmount : principal;
+  const rate = isOperationsMode ? operationsRate : (isCompleteApproved ? approvedRoi : null);
+  const tenure = isOperationsMode ? operationsTenure : (isCompleteApproved ? approvedTenure : null);
+  const sanctionDate = isOperationsMode
+    ? pick(decision, ['decidedAt', 'DecidedAt', 'decisionDate', 'DecisionDate', 'createdDate', 'CreatedDate', 'createdAt', 'CreatedAt'])
+      || pick(operationsSchedule, ['disbursementDate', 'DisbursementDate'])
+    : isCompleteApproved
     ? pick(decision, ['decidedAt', 'DecidedAt', 'decisionDate', 'DecisionDate', 'createdDate', 'CreatedDate', 'createdAt', 'CreatedAt'])
     : null;
 
@@ -276,25 +359,49 @@ export default function KfsReport({
     pick(productRecord, ['loanProductId', 'LoanProductId']) ??
     pick(productWrapper, ['loanProductId', 'LoanProductId']) ??
     pick(app, ['loanProductId', 'LoanProductId']);
-  const baseRate = productBaseRate(data.rateOfInterests, loanProductId, sanctionDate);
+  const baseRate = isOperationsMode ? null : productBaseRate(data.rateOfInterests, loanProductId, sanctionDate);
   const rtrRoi = toNumber(pick(data.obligationSummary, ['proposedROI', 'ProposedROI', 'proposedRoi']));
-  const finalRate = rtrRoi > 0 ? rtrRoi : rate;
+  const finalRate = isOperationsMode ? rate : (rtrRoi > 0 ? rtrRoi : rate);
 
   const totals = useMemo(
-    () => calcKfsTotals({ principal, annualRate: rate, months: tenure, processingFeePct, startDate: sanctionDate }),
-    [principal, rate, tenure, processingFeePct, sanctionDate]
+    () => isOperationsMode
+      ? {
+        processingFee: operationsProcessingFee,
+        emi: toNumber(pick(operationsSchedule, ['monthlyEmi', 'MonthlyEmi'])),
+        firstDueDate: operationsFirstDueDate,
+        totalInterest: operationsInterest,
+        totalPayable: principal != null && operationsInterest != null ? principal + operationsInterest : null,
+        schedule: operationsScheduleRows,
+      }
+      : calcKfsTotals({ principal, annualRate: rate, months: tenure, processingFeePct, startDate: sanctionDate }),
+    [
+      isOperationsMode,
+      operationsFirstDueDate,
+      operationsInterest,
+      operationsProcessingFee,
+      operationsSchedule,
+      operationsScheduleRows,
+      principal,
+      rate,
+      tenure,
+      processingFeePct,
+      sanctionDate,
+    ]
   );
 
-  const documentationFee =
-    principal > 0 && documentationFeePct > 0 ? principal * (documentationFeePct / 100) * (1 + GST_RATE) : 0;
-  const insuranceAmount = principal > 0 && insurancePct > 0 ? principal * (insurancePct / 100) : null;
-  const feesToLender = (totals.processingFee || 0) + documentationFee;
-  const netDisbursed = principal > 0 ? principal - feesToLender : null;
-  const apr = totals.emi ? calcApr(netDisbursed, totals.emi, tenure) : null;
+  const documentationFee = isOperationsMode
+    ? operationsDocumentationFee
+    : principal > 0 && documentationFeePct > 0 ? principal * (documentationFeePct / 100) * (1 + GST_RATE) : 0;
+  const insuranceAmount = isOperationsMode
+    ? operationsInsuranceAmount
+    : principal > 0 && insurancePct > 0 ? principal * (insurancePct / 100) : null;
+  const feesToLender = isOperationsMode ? operationsFeesToLender : (totals.processingFee || 0) + documentationFee;
+  const netDisbursed = isOperationsMode ? operationsNetDisbursed : (principal > 0 ? principal - feesToLender : null);
+  const apr = isOperationsMode ? null : (totals.emi ? calcApr(netDisbursed, totals.emi, tenure) : null);
 
-  const spread = baseRate != null && finalRate != null ? finalRate - baseRate : null;
-  const shockedEmi = calcEmi(principal, (finalRate || 0) + RATE_SHOCK, tenure);
-  const extendedTenure = tenure ? tenure + MAX_TENOR_EXTENSION_MONTHS : null;
+  const spread = !isOperationsMode && baseRate != null && finalRate != null ? finalRate - baseRate : null;
+  const shockedEmi = isOperationsMode ? null : calcEmi(principal, (finalRate || 0) + RATE_SHOCK, tenure);
+  const extendedTenure = !isOperationsMode && tenure ? tenure + MAX_TENOR_EXTENSION_MONTHS : null;
 
   /* ── Parties ─────────────────────────────────────────────────────── */
 
@@ -304,7 +411,9 @@ export default function KfsReport({
   const hasOfficialIdentifiers = Boolean(officialLoanAccountNo);
   const canExport = Boolean(isCompleteApproved && hasOfficialIdentifiers);
   const accountNo = officialLoanAccountNo || '';
-  const loanType =
+  const loanType = isOperationsMode
+    ? operationsData?.loanProductName
+    :
     pick(productWrapper, ['loanProductName', 'LoanProductName', 'productName', 'ProductName']) ??
     pick(productRecord, ['loanProductName', 'LoanProductName', 'productName', 'ProductName']) ??
     pick(app, ['loanProduct']) ??
@@ -330,13 +439,17 @@ export default function KfsReport({
 
   const tenureText = tenure ? `${tenure} Months` : '';
   const emiText = fmtRupee(totals.emi);
-  const firstDue = totals.firstDueDate;
+  const firstDue = isOperationsMode ? operationsFirstDueDate : totals.firstDueDate;
 
   const saveKfsDocument = async (pdf, fileName) => {
-    const customerCode = resolveCustomerCode(verificationData);
-    const uploadedBy = resolveUploadedBy(verificationData);
+    const customerCode = isOperationsMode
+      ? operationsData?.customerCode
+      : resolveCustomerCode(verificationData);
+    const uploadedBy = isOperationsMode
+      ? operationsData?.uploadedBy
+      : resolveUploadedBy(verificationData);
 
-    await approvalDocumentService.uploadApplicationDocument({
+    const result = await approvalDocumentService.uploadApplicationDocument({
       pdf,
       fileName,
       applicationProductDetailsId: applicationProductDetailsId || resolveApplicationProductDetailsId(verificationData),
@@ -345,20 +458,36 @@ export default function KfsReport({
       documentType: 'KFS',
       uploadedBy,
     });
+    if (onPdfPersisted) await onPdfPersisted(result);
   };
 
   const { handlePrint, handleDownloadPdf, isExporting, exportError } = usePrintAndPdf(reportRef, {
     title: 'KFS',
-    fileName: `KFS-${officialLoanAccountNo || 'Official'}.pdf`,
+    fileName: `KFS-${officialLoanAccountNo || operationsData?.customerCode || 'Official'}.pdf`,
     onPdfGenerated: saveKfsDocument,
+    downloadAfterGenerate: !isOperationsMode,
   });
 
   /*
    * html2canvas measures the text baseline with a hidden <img> on the live document;
    * the global `img { display: block }` reset skews it and every line is drawn low.
    */
+  const operationsCanExport = Boolean(
+    isOperationsMode
+      && operationsData?.isEligible
+      && (!operationsData?.repaymentValidation || operationsData.repaymentValidation.valid)
+      && operationsRepaymentTotals
+      && isCompleteApproved
+      && operationsSchedulePrincipal != null
+      && operationsRate != null
+      && operationsTenure != null
+      && operationsFeesToLender != null
+      && operationsNetDisbursed != null
+  );
+  const canExportDocument = isOperationsMode ? operationsCanExport : canExport;
+
   const handleDownload = async () => {
-    if (!canExport || isExporting) return;
+    if (!canExportDocument || isExporting) return;
     const metricsFix = document.createElement('style');
     metricsFix.textContent =
       'body > div[style*="visibility: hidden"][style*="white-space: nowrap"] > img { display: inline !important; }';
@@ -390,9 +519,11 @@ export default function KfsReport({
         <span className="cam-toolbar-status">{loading ? 'Loading KFS data…' : DOC_LABEL}</span>
         <div className="cam-toolbar-actions">
           {exportError && <span className="cam-toolbar-error">{exportError}</span>}
-          <button type="button" className="cam-btn" onClick={() => { if (!canExport || loading) return; handlePrint(); }} disabled={loading || !canExport} title={!canExport ? 'Official Loan Account Number and complete approved terms required for printing' : 'Print KFS'}>Print</button>
-          <button type="button" className="cam-btn cam-btn-primary" onClick={handleDownload} disabled={loading || isExporting || !canExport} title={!canExport ? 'Official Loan Account Number and complete approved terms required for PDF download' : 'Download KFS PDF'}>
-            {isExporting ? 'Generating PDF…' : 'Download PDF'}
+          {!isOperationsMode && (
+            <button type="button" className="cam-btn" onClick={() => { if (!canExportDocument || loading) return; handlePrint(); }} disabled={loading || !canExportDocument} title={!canExportDocument ? 'Official Loan Account Number and complete approved terms required for printing' : 'Print KFS'}>Print</button>
+          )}
+          <button type="button" className="cam-btn cam-btn-primary" onClick={handleDownload} disabled={loading || isExporting || !canExportDocument} title={!canExportDocument ? 'Complete approved Operations data and a saved schedule/fees record are required' : (isOperationsMode ? 'Generate and store KFS' : 'Download KFS PDF')}>
+            {isExporting ? (isOperationsMode ? 'Generating KFS…' : 'Generating PDF…') : (isOperationsMode ? 'Generate KFS' : 'Download PDF')}
           </button>
         </div>
       </div>
@@ -407,7 +538,11 @@ export default function KfsReport({
         </div>
       )}
 
-      {isCompleteApproved && !hasOfficialIdentifiers && !loading && (
+      {isOperationsMode && operationsData?.validationError && !loading && (
+        <div className="kfs-notice" role="alert">{operationsData.validationError}</div>
+      )}
+
+      {!isOperationsMode && isCompleteApproved && !hasOfficialIdentifiers && !loading && (
         <div className="kfs-notice" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>Official Loan Identifiers Missing: The official Loan Account Number has not been generated for this approved loan. KFS export and printing are disabled.</span>
           {onGenerateIdentifier && (
@@ -458,7 +593,7 @@ export default function KfsReport({
               <tr>
                 <td className="kfs-no">2</td>
                 <td colSpan={2}>Sanctioned Loan amount (in Rupees)</td>
-                <td colSpan={2}>{principal ? `INR ${fmtINR(principal)} (${amountInWords(principal)})` : NIL}</td>
+                <td colSpan={2}>{sanctionedAmount != null ? `INR ${fmtINR(sanctionedAmount)} (${amountInWords(sanctionedAmount)})` : NIL}</td>
               </tr>
               <tr>
                 <td className="kfs-no">3</td>
@@ -474,6 +609,13 @@ export default function KfsReport({
                 <td colSpan={2}>Loan term (year/months/days)</td>
                 <td colSpan={2}>{tenure ? `[${tenure} month] i.e. ${tenure} Months` : NIL}</td>
               </tr>
+              {isOperationsMode && (
+                <tr>
+                  <td className="kfs-no">—</td>
+                  <td colSpan={2}>Maturity Date</td>
+                  <td colSpan={2}>{nil(fmtLongDate(pick(operationsSchedule, ['maturityDate', 'MaturityDate'])))}</td>
+                </tr>
+              )}
               <tr>
                 <td className="kfs-no">5</td>
                 <td colSpan={4}>Instalment details</td>
@@ -596,56 +738,73 @@ export default function KfsReport({
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td className="kfs-no">(i)</td><td>Processing Fee</td>
-                <td>One Time</td><td>{totals.processingFee ? fmtINR(totals.processingFee) : NIL}</td>
-                <td /><td />
-              </tr>
-              <tr>
-                <td className="kfs-no">(ii)</td><td>Login Fees</td>
-                <td>One Time</td><td>{documentationFee ? fmtINR(documentationFee) : NIL}</td>
-                <td /><td />
-              </tr>
-              <tr>
-                <td className="kfs-no">(iii)</td><td>Cersai Charge</td>
-                <td /><td />
-                <td>One Time</td><td>{NIL}</td>
-              </tr>
-              <tr>
-                <td className="kfs-no">(iv)</td><td>Technical Fees</td>
-                <td /><td />
-                <td>One Time</td><td>{NIL}</td>
-              </tr>
-              <tr>
-                <td className="kfs-no">(v)</td><td>Legal Fees</td>
-                <td /><td />
-                <td>One Time</td><td>{NIL}</td>
-              </tr>
-              <tr>
-                <td colSpan={6} className="kfs-strong">
-                  Value Added Services(&quot;VAS&quot;) <sup>6</sup> forming part of the Sanctioned Loan Amount
-                </td>
-              </tr>
-              <tr>
-                <td className="kfs-no">(i)</td><td>Life Insurance</td>
-                <td /><td />
-                <td>One Time</td><td>{insuranceAmount ? fmtINR(insuranceAmount) : NIL}</td>
-              </tr>
-              <tr>
-                <td className="kfs-no">(ii)</td><td>Health Insurance</td>
-                <td /><td />
-                <td>One Time</td><td>{NIL}</td>
-              </tr>
-              <tr>
-                <td className="kfs-no">(iii)</td><td>Personal Accident Cover</td>
-                <td /><td />
-                <td>One Time</td><td>{NIL}</td>
-              </tr>
-              <tr>
-                <td className="kfs-no">(iv)</td><td>Stamp Duty</td>
-                <td /><td />
-                <td>One Time</td><td>{NIL}</td>
-              </tr>
+              {isOperationsMode ? (
+                operationsFeeLines.length ? operationsFeeLines.map((line, index) => (
+                  <tr key={`${pick(line, ['feeId', 'FeeId']) || 'fee'}-${index}`}>
+                    <td className="kfs-no">{index + 1}</td>
+                    <td>{nil(pick(line, ['feeName', 'FeeName']))}</td>
+                    <td>One Time</td>
+                    <td>{operationsFeeAmount(line) != null ? fmtINR(operationsFeeAmount(line)) : NIL}</td>
+                    <td />
+                    <td />
+                  </tr>
+                )) : (
+                  <tr><td colSpan={6} className="kfs-center">{NIL}</td></tr>
+                )
+              ) : (
+                <>
+                  <tr>
+                    <td className="kfs-no">(i)</td><td>Processing Fee</td>
+                    <td>One Time</td><td>{totals.processingFee ? fmtINR(totals.processingFee) : NIL}</td>
+                    <td /><td />
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(ii)</td><td>Login Fees</td>
+                    <td>One Time</td><td>{documentationFee ? fmtINR(documentationFee) : NIL}</td>
+                    <td /><td />
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(iii)</td><td>Cersai Charge</td>
+                    <td /><td />
+                    <td>One Time</td><td>{NIL}</td>
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(iv)</td><td>Technical Fees</td>
+                    <td /><td />
+                    <td>One Time</td><td>{NIL}</td>
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(v)</td><td>Legal Fees</td>
+                    <td /><td />
+                    <td>One Time</td><td>{NIL}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan={6} className="kfs-strong">
+                      Value Added Services(&quot;VAS&quot;) <sup>6</sup> forming part of the Sanctioned Loan Amount
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(i)</td><td>Life Insurance</td>
+                    <td /><td />
+                    <td>One Time</td><td>{insuranceAmount ? fmtINR(insuranceAmount) : NIL}</td>
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(ii)</td><td>Health Insurance</td>
+                    <td /><td />
+                    <td>One Time</td><td>{NIL}</td>
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(iii)</td><td>Personal Accident Cover</td>
+                    <td /><td />
+                    <td>One Time</td><td>{NIL}</td>
+                  </tr>
+                  <tr>
+                    <td className="kfs-no">(iv)</td><td>Stamp Duty</td>
+                    <td /><td />
+                    <td>One Time</td><td>{NIL}</td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
 
@@ -668,7 +827,7 @@ export default function KfsReport({
               <tr>
                 <td className="kfs-no">(i)</td>
                 <td className="kfs-strong">Penal charges, if any, in case of delayed payment</td>
-                <td className="kfs-strong">{penaltyPct != null ? `${fmtPct(penaltyPct)} p.m` : '2% p.m'}</td>
+                <td className="kfs-strong">{penaltyPct != null ? `${fmtPct(penaltyPct)} p.m` : (isOperationsMode ? NIL : '2% p.m')}</td>
               </tr>
               <tr>
                 <td className="kfs-no">(ii)</td>
@@ -855,7 +1014,7 @@ export default function KfsReport({
               </tr>
             </thead>
             <tbody>
-              <tr><td className="kfs-no">1</td><td>Sanctioned Loan amount (in Rupees)</td><td>{principal ? `INR ${fmtINR(principal)}` : NIL}</td></tr>
+              <tr><td className="kfs-no">1</td><td>Sanctioned Loan amount (in Rupees)</td><td>{sanctionedAmount != null ? `INR ${fmtINR(sanctionedAmount)}` : NIL}</td></tr>
               <tr><td className="kfs-no">2</td><td>Loan Term (in years/ months/ days)</td><td>{nil(tenureText)}</td></tr>
               <tr>
                 <td className="kfs-no">a)</td>
@@ -868,7 +1027,7 @@ export default function KfsReport({
                   Type of EPI
                   <div>Amount of each EPI (in Rupees) and nos. of EPIs (e.g., no. of EMIs in case of monthly instalments)</div>
                 </td>
-                <td>{totals.emi ? `EMI-Rs. ${Math.round(totals.emi).toLocaleString('en-IN')} -${tenureText}` : NIL}</td>
+                <td>{totals.emi != null ? `EMI-Rs. ${Math.round(totals.emi).toLocaleString('en-IN')} -${tenureText}` : NIL}</td>
               </tr>
               <tr><td className="kfs-no">c)</td><td>No. of instalments for payment of capitalised interest, if any</td><td>0</td></tr>
               <tr><td className="kfs-no">d)</td><td>Total amount capitalized during the Grace Period</td><td>0</td></tr>
@@ -893,8 +1052,8 @@ export default function KfsReport({
                 <td>Total Interest Amount to be charged during the entire tenor of the loan as per the rate prevailing on sanction date (in Rupees)</td>
                 <td>{totals.totalInterest != null ? fmtINR(totals.totalInterest) : NIL}</td>
               </tr>
-              <tr><td className="kfs-no">6</td><td>Fee/ Charges payable (in Rupees)</td><td>{feesToLender ? fmtINR(feesToLender) : NIL}</td></tr>
-              <tr><td className="kfs-no">A</td><td>Payable to the RE</td><td>{feesToLender ? fmtINR(feesToLender) : NIL}</td></tr>
+              <tr><td className="kfs-no">6</td><td>Fee/ Charges payable (in Rupees)</td><td>{feesToLender != null ? fmtINR(feesToLender) : NIL}</td></tr>
+              <tr><td className="kfs-no">A</td><td>Payable to the RE</td><td>{feesToLender != null ? fmtINR(feesToLender) : NIL}</td></tr>
               <tr><td className="kfs-no">B</td><td>Payable to third-party routed through RE</td><td>{NIL}</td></tr>
               <tr><td className="kfs-no">7</td><td>Net disbursed amount (1-6) (in Rupees)</td><td>{netDisbursed != null ? fmtINR(netDisbursed) : NIL}</td></tr>
               <tr>
@@ -915,18 +1074,28 @@ export default function KfsReport({
               <tr>
                 <td className="kfs-no">11</td>
                 <td>Due date of payment of instalment and interest</td>
-                <td>{`${ordinal(EMI_DUE_DAY)} of Each Month. As per the Repayment Schedule.`}</td>
+                <td>{isOperationsMode ? 'As per the persisted Repayment Schedule.' : `${ordinal(EMI_DUE_DAY)} of Each Month. As per the Repayment Schedule.`}</td>
               </tr>
             </tbody>
           </table>
 
           <p className="kfs-schedule-title">Repayment Schedule/Amortization Schedule</p>
-          <ScheduleTable rows={firstScheduleRows} totalRows={totals.schedule} showTotals={restScheduleRows.length === 0} />
+          <ScheduleTable
+            rows={firstScheduleRows}
+            totalRows={totals.schedule}
+            totalSummary={isOperationsMode ? operationsScheduleTotalSummary : null}
+            showTotals={restScheduleRows.length === 0}
+          />
         </KfsPage>
 
         {schedulePages.map((rows, idx) => (
           <KfsPage key={`schedule-${idx}`}>
-            <ScheduleTable rows={rows} totalRows={totals.schedule} showTotals={idx === schedulePages.length - 1} />
+            <ScheduleTable
+              rows={rows}
+              totalRows={totals.schedule}
+              totalSummary={isOperationsMode ? operationsScheduleTotalSummary : null}
+              showTotals={idx === schedulePages.length - 1}
+            />
           </KfsPage>
         ))}
 

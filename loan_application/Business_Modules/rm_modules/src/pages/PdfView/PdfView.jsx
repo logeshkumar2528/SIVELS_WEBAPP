@@ -19,6 +19,9 @@ import { isApplicantDocumentTuple } from '../KycDocuments/kycDocumentState';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { rmCustomerService } from '../../services/rmCustomerService';
+import { extractApiErrorMessage } from '../../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
+import { RM_WORKFLOW_CODES } from '../../utils/rmWorkflowStatus';
 import './PdfView.css';
 import LogoImage from '../../../../../Core/src/assets/branding/SivelsFinanceLogo.jpg';
 
@@ -2551,23 +2554,10 @@ export default function PdfView() {
 
   const isReviewMode = Boolean(location.state?.reviewMode);
 
-  // Status-6 detection with priority:
-  // 1. liveCustomer.status / liveCustomer.Status
-  // 2. appData.rawStatusCode
-  // 3. appData.rawStatus
-  // 4. appData.status === 'Returned'
-  const rawBackendStatus =
-    liveCustomer?.status !== undefined && liveCustomer?.status !== null
-      ? Number(liveCustomer.status)
-      : (liveCustomer?.Status !== undefined && liveCustomer?.Status !== null
-          ? Number(liveCustomer.Status)
-          : (appData.rawStatusCode !== undefined && appData.rawStatusCode !== null
-              ? Number(appData.rawStatusCode)
-              : (appData.rawStatus !== undefined && appData.rawStatus !== null
-                  ? Number(appData.rawStatus)
-                  : (appData.status === 'Returned' ? 6 : null))));
-
-  const isReturnedApplication = rawBackendStatus === 6;
+  const workflowStatus = extractWorkflowStatus({ ...appData, ...(liveCustomer || {}) });
+  const isReturnedApplication =
+    workflowStatus.workflowStatusCode === RM_WORKFLOW_CODES.RETURNED_TO_RM ||
+    (!workflowStatus.hasDetailedWorkflowStatus && Number(workflowStatus.legacyStatus) === 6);
 
   // Load workflow history only for returned application
   useEffect(() => {
@@ -2740,21 +2730,29 @@ export default function PdfView() {
       };
 
       await rmCustomerService.resubmitApplicationToBackOffice(agentCustomerId, payload);
+      const confirmedRecord = await rmCustomerService.getCustomerById(agentCustomerId);
+      const confirmedStatus = extractWorkflowStatus(confirmedRecord);
+      if (
+        (confirmedStatus.workflowStatusCode && confirmedStatus.workflowStatusCode !== RM_WORKFLOW_CODES.BO_PENDING) ||
+        (!confirmedStatus.workflowStatusCode && Number(confirmedStatus.legacyStatus) !== 2) ||
+        (confirmedStatus.legacyStatus !== null && Number(confirmedStatus.legacyStatus) !== 2)
+      ) {
+        throw new Error('Application resubmission could not be confirmed by the server. Please refresh and try again.');
+      }
 
-      // On successful 6 -> 2 transition:
       saveApplication(applicationId, {
-        status: 'Logged to HO',
-        rawStatusCode: 2,
-        rawStatus: 2,
+        status: confirmedStatus.workflowStatusName || 'Logged to HO',
+        rawStatusCode: confirmedStatus.legacyStatus,
+        rawStatus: confirmedStatus.legacyStatus,
+        workflowStatus: confirmedStatus,
       });
       setResubmitSuccess(true);
     } catch (err) {
       console.error('Error resubmitting application to Back Office:', err);
-      const serverMsg =
-        err?.response?.data?.message ||
-        err?.response?.data?.title ||
-        err?.message ||
-        'Failed to resubmit application to Back Office. Please try again.';
+      const serverMsg = extractApiErrorMessage(
+        err,
+        'Failed to resubmit application to Back Office. Please try again.'
+      );
       setResubmitError(serverMsg);
     } finally {
       setIsResubmitting(false);

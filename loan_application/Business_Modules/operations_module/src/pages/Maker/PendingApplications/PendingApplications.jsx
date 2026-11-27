@@ -7,6 +7,7 @@ import OperationsLayout from '../../../layouts/OperationsLayout';
 import OperationsDocumentViewer from '../../../components/OperationsDocumentViewer';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
 import { ROUTES } from '../../../config/routeConfig';
+import { extractApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler';
 import './PendingApplications.css';
 
 const PAGE_SIZE = 10;
@@ -31,14 +32,7 @@ function sortByLatestStatusChange(applications) {
 }
 
 function getErrorMessage(error, fallback) {
-  return error?.response?.data?.message || error?.response?.data?.title || error?.message || fallback;
-}
-
-function getOperationsStatusLabel(status) {
-  const normalized = String(status || '').trim().toUpperCase();
-  if (normalized === 'PENDING') return 'Pending';
-  if (normalized === 'IN_PROGRESS' || normalized === 'IN PROGRESS') return 'In Progress';
-  return status || 'Pending';
+  return extractApiErrorMessage(error, fallback);
 }
 
 function ProfileImage({ application }) {
@@ -164,7 +158,13 @@ export default function PendingApplications() {
                         <td className="operations-new-applications-index">{(currentPage - 1) * PAGE_SIZE + rowIndex + 1}</td>
                         <td>{application.loanAccountNumber || '—'}</td>
                         <td><div className="operations-new-applications-customer"><ProfileImage application={application} /><span>{application.fullName || '—'}</span></div></td>
-                        <td><span className="operations-new-applications-status-chip">{getOperationsStatusLabel(application.operationsStatus)}</span></td>
+                        <td>
+                          <div className="operations-new-applications-status">
+                            <span className="operations-new-applications-status-chip">
+                              {application.workflowStatusName || 'Status unavailable'}
+                            </span>
+                          </div>
+                        </td>
                         <td><DocumentAction label="View" onClick={() => openDocument(application, 'form')} /></td>
                         <td><DocumentAction label="View" onClick={() => openDocument(application, 'recommendation')} /></td>
                         <td><DocumentAction label="View" onClick={() => openDocument(application, 'sanction')} /></td>

@@ -23,7 +23,9 @@ import ViewCustomerDrawer from './ViewCustomerDrawer';
 import { rmCustomerService } from '../../services/rmCustomerService';
 import { masterService } from '../../../../../Core/src/services/masterService';
 import axiosInstance from '../../../../../Core/src/api/axiosInstance';
-import { getCurrentRMContext, normalizeApplicationStatus } from '../../utils/rmContext';
+import { getCurrentRMContext } from '../../utils/rmContext';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
+import { matchesRmStatusFilter, RM_WORKFLOW_CODES } from '../../utils/rmWorkflowStatus';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { resolveVerificationIdByCodeOrName } from '../../../../../Core/src/utils/verificationHelper';
 import { matchesListingDateCriteria } from '../../utils/dateHelper';
@@ -452,6 +454,8 @@ export default function CustomerSubmissionHistory() {
 
           const et = employmentTypes.find((e) => Number(e.employmentTypeId || e.id) === Number(customer.employmentTypeId));
 
+          const workflowStatus = extractWorkflowStatus(customer);
+
           return {
             ...customer,
             rmCustomerId: customer.rmCustomerId || customer.rMCustomerId || customer.id,
@@ -471,7 +475,9 @@ export default function CustomerSubmissionHistory() {
               customer.ApplicationProductDetailsId ??
               null,
             employmentTypeName: customer.employmentTypeName || et?.employmentTypeName || et?.name || 'N/A',
-            status: normalizeApplicationStatus(customer.status ?? customer.Status, customer.statusName ?? customer.StatusName),
+            workflowStatus,
+            workflowStatusCode: workflowStatus.workflowStatusCode,
+            status: workflowStatus.workflowStatusName || 'Status unavailable',
           };
         })
       );
@@ -647,8 +653,7 @@ export default function CustomerSubmissionHistory() {
         if (!nameMatch && !mobileMatch) return false;
       }
 
-      const matchesStatus =
-        selectedStatus === 'All Status' || String(item.status ?? '').toLowerCase() === selectedStatus.toLowerCase();
+      const matchesStatus = matchesRmStatusFilter(item.workflowStatus, selectedStatus);
 
       return matchesStatus;
     });
@@ -846,12 +851,9 @@ export default function CustomerSubmissionHistory() {
     return 'default';
   };
 
-  const renderStatusBadge = (status) => {
-    const type = getStatusType(status);
-    let displayStatus = status || 'Unknown';
-    if (status === 'Pending') displayStatus = 'RM Pending';
-    else if (status === 'Under Review') displayStatus = 'CM Pending';
-    else if (status === 'Returned') displayStatus = 'BO Returned';
+  const renderStatusBadge = (workflowStatus) => {
+    const displayStatus = workflowStatus?.workflowStatusName || 'Status unavailable';
+    const type = getStatusType(displayStatus);
 
     switch (type) {
       case 'pending-rm':
@@ -1079,7 +1081,9 @@ export default function CustomerSubmissionHistory() {
                     Number(item.rmId || item.RMId || item.createdBy || item.CreatedBy) === Number(currentRmId);
                   const isItemConverted = Boolean(item.isConverted || item.IsConverted || isDirectRmOwned);
                   const hasBeenConverted = Boolean(item.isConverted || item.IsConverted || item.applicationId || item.ApplicationId || item.applicationProductDetailsId);
-                  const isNewStatus = item.status === 'New' || Number(item.raw?.status ?? item.Status ?? item.status) === 0;
+                  const isNewStatus =
+                    item.workflowStatusCode === RM_WORKFLOW_CODES.NEW ||
+                    Number(item.raw?.status ?? item.Status) === 0;
                   const canEditOrDelete = isNewStatus && isDirectRmOwned && !hasBeenConverted;
 
                   return (
@@ -1113,7 +1117,7 @@ export default function CustomerSubmissionHistory() {
                       <td className="rm-csh-td">{item.loanPurposeName}</td>
                       <td className="rm-csh-td font-medium">{formatCurrency(item.expectedLoanAmount)}</td>
                       <td className="rm-csh-td">{formatDate(item.createdAt)}</td>
-                      <td className="rm-csh-td">{renderStatusBadge(item.status)}</td>
+                      <td className="rm-csh-td">{renderStatusBadge(item.workflowStatus)}</td>
                       <td className="rm-csh-td">
                         <div className="rm-csh-action-group">
                           <button

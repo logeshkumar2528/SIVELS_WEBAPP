@@ -15,9 +15,10 @@ import {
   buildAllowedAgentIdSet,
   filterAgentsForRm,
   getCurrentRMContext,
-  normalizeApplicationStatus,
   resolveApiArray,
 } from '../../utils/rmContext';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
+import { getRmWorkflowStatusLabel } from '../../utils/rmWorkflowStatus';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { buildApplicationDisplayId } from '../applicationWizard/flowUtils';
 import './SubmissionHistory.css';
@@ -56,7 +57,8 @@ function mapSubmission(record, agentsById = {}, rmsById = {}) {
     submittedDate: formatDate(submittedRaw),
     submittedTime: formatTime(submittedRaw),
     submittedAt: submittedRaw,
-    status: normalizeApplicationStatus(record.status ?? record.Status, record.statusName || record.StatusName),
+    workflowStatus: extractWorkflowStatus(record),
+    status: getRmWorkflowStatusLabel(extractWorkflowStatus(record)),
   };
 }
 
@@ -277,7 +279,7 @@ export default function SubmissionHistory() {
     {
       key: 'status',
       label: 'STATUS',
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => <StatusBadge workflowStatus={row.workflowStatus} />,
     },
     {
       key: 'action',

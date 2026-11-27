@@ -45,6 +45,7 @@ const limit = {
 };
 
 function renderPanel(props = {}) {
+  const sanctionedAmount = props.sanctionedAmount ?? props.approvalCheck?.amount ?? null;
   return render(
     <CreditDecisionPanel
       isPending
@@ -65,6 +66,7 @@ function renderPanel(props = {}) {
       onDownloadDocument={vi.fn()}
       identifierWarning=""
       approvalLimit={limit}
+      sanctionedAmount={sanctionedAmount}
       {...props}
     />
   );
@@ -136,6 +138,7 @@ describe('CreditDecisionPanel', () => {
     grant(['CREDIT.VIEW', 'CREDIT.EDIT', 'CREDIT.APPROVE']);
     renderPanel({
       pendingEscalation: { ...waitingEscalation, canCurrentUserApprove: true, isWaitingForAnotherRole: false },
+      approvalCheck: { loading: false, amount: 500000, outcome: 'WithinLimit', maximumApprovalAmount: 750000 },
     });
     expect(screen.getByText(/Forwarded to you by Credit Manager on/)).toBeInTheDocument();
     ['Approve', 'Reject', 'Return to Back Office', 'Forward'].forEach((name) => {
@@ -150,5 +153,13 @@ describe('CreditDecisionPanel', () => {
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
     expect(screen.getByText(/can't record a credit decision/)).toBeInTheDocument();
     expect(screen.queryByTestId('approval-range')).not.toBeInTheDocument();
+  });
+
+  it('hides decision buttons for a non-actionable workflow stage', () => {
+    grant(['CREDIT.VIEW', 'CREDIT.EDIT', 'CREDIT.APPROVE']);
+    renderPanel({ canWork: false });
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+    expect(screen.getByText(/not currently assigned to you/)).toBeInTheDocument();
   });
 });

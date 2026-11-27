@@ -3,6 +3,8 @@ import { resolveApplicantName } from '../../pages/applicationWizard/flowUtils';
 import { resolveApplicationOwnership } from '../../utils/ownershipHelper';
 import { formatDate } from '../../utils/dateHelper';
 import rmCustomerService from '../../services/rmCustomerService';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
+import { RM_WORKFLOW_CODES } from '../../utils/rmWorkflowStatus';
 import './ApplicationTopSummary.css';
 
 export default function ApplicationTopSummary({
@@ -117,23 +119,11 @@ export default function ApplicationTopSummary({
     return { rmDisplay: finalRm, agentDisplay: finalAgent };
   }, [appData]);
 
-  // 7. Returned Application Status Detection (Status 6)
+  // 7. Returned Application Status Detection from backend workflow data
   const isReturnedApplication = useMemo(() => {
-    const rawStatus =
-      appData?.rawStatus !== undefined && appData?.rawStatus !== null
-        ? Number(appData.rawStatus)
-        : (appData?.rawStatusCode !== undefined && appData?.rawStatusCode !== null
-            ? Number(appData.rawStatusCode)
-            : (appData?.customer?.status !== undefined && appData?.customer?.status !== null
-                ? Number(appData.customer.status)
-                : (appData?.customer?.Status !== undefined && appData?.customer?.Status !== null
-                    ? Number(appData.customer.Status)
-                    : (appData?.raw?.customer?.status !== undefined && appData?.raw?.customer?.status !== null
-                        ? Number(appData.raw?.customer?.status)
-                        : (appData?.raw?.customer?.Status !== undefined && appData?.raw?.customer?.Status !== null
-                            ? Number(appData.raw?.customer?.Status)
-                            : (appData?.status === 'Returned' || appData?.status === 6 ? 6 : null))))));
-    return rawStatus === 6;
+    const workflowStatus = extractWorkflowStatus(appData);
+    return workflowStatus.workflowStatusCode === RM_WORKFLOW_CODES.RETURNED_TO_RM ||
+      (!workflowStatus.hasDetailedWorkflowStatus && Number(workflowStatus.legacyStatus) === 6);
   }, [appData]);
 
   // 8. Effective Application ID for History Fetch

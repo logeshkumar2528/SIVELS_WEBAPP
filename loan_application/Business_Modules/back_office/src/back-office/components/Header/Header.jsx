@@ -110,8 +110,20 @@ const Header = memo(function Header({
       {/* ---- Left — Page title ---- */}
       <div className="header-left">
 
+        {onMenuToggle && (
+          <button
+            type="button"
+            className="header-menu-btn"
+            onClick={onMenuToggle}
+            aria-label="Toggle navigation menu"
+          >
+            {MenuIcon && <MenuIcon size={20} strokeWidth={1.8} />}
+          </button>
+        )}
+
         <div className="header-title-group">
           <h1 className="header-title">{title}</h1>
+          {subtitle && <p className="header-subtitle">{subtitle}</p>}
         </div>
       </div>
 

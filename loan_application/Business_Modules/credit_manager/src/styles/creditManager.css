@@ -938,7 +938,9 @@
   border-radius: 9999px;
   font-size: var(--font-size-xs, 11px);
   font-weight: 600;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
   border: none;
 }
 

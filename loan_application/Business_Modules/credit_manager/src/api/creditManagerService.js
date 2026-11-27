@@ -33,6 +33,14 @@ const creditManagerService = {
     return unwrapList(response);
   },
 
+  startCreditReview: async (agentCustomerId, payload) => {
+    const response = await axiosInstance.post(
+      CREDIT_MANAGER_ENDPOINTS.START_CREDIT_REVIEW(agentCustomerId),
+      payload
+    );
+    return unwrapResponse(response);
+  },
+
   /**
    * Status 3 -> 4. Payload: { performedByUserId, performedByRole, remarks,
    * sanctionedLoanAmount, sanctionedROI, sanctionedTenureMonths, conditions }

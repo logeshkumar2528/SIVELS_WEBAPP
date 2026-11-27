@@ -86,6 +86,27 @@
   background: #fff;
 }
 
+.operations-document-viewer__document-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  border-bottom: 1px solid #d7e8da;
+  background: #edf8ef;
+}
+
+.operations-document-viewer__document-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  color: #ffffff;
+  background: #164b2d;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .operations-document-viewer__state {
   margin: 24px auto;
   max-width: 560px;

@@ -12,7 +12,10 @@ import { useApplicationDraftStore } from '../../state/ApplicationDraftContext';
 import WizardSectionLayout from '../../components/WizardSectionLayout/WizardSectionLayout';
 import ErrorPopup from '../../components/ErrorPopup/ErrorPopup';
 import { useLoading } from '../../../../../Core/src/context/LoadingContext';
+import { extractApiErrorMessage } from '../../../../../Core/src/utils/apiErrorHandler';
+import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 import { getCurrentRMContext } from '../../utils/rmContext';
+import { RM_WORKFLOW_CODES } from '../../utils/rmWorkflowStatus';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = API_BASE_URL;
@@ -459,18 +462,42 @@ export default function Declaration() {
 
         if (!putRes.ok) {
           let errorMessage = `Failed to update application status to Logged to HO (${putRes.status})`;
+          let errorData = null;
           try {
-            const errorData = await putRes.json();
-            if (errorData?.message) {
-              errorMessage = errorData.message;
-            }
+            errorData = await putRes.json();
           } catch {
             // Keep fallback message if response body is not JSON
           }
+          errorMessage = extractApiErrorMessage(
+            { response: { status: putRes.status, data: errorData } },
+            errorMessage
+          );
           throw new Error(errorMessage);
         }
 
-        saveApplication(appId, { status: 'Logged to HO' });
+        const confirmRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`);
+        if (!confirmRes.ok) {
+          const confirmData = await confirmRes.json().catch(() => null);
+          throw new Error(
+            extractApiErrorMessage(
+              { response: { status: confirmRes.status, data: confirmData } },
+              `Unable to confirm application submission (${confirmRes.status})`
+            )
+          );
+        }
+        const confirmedData = await confirmRes.json().catch(() => null);
+        const confirmedStatus = extractWorkflowStatus(
+          Array.isArray(confirmedData) ? confirmedData[0] : (confirmedData?.value?.[0] || confirmedData?.data?.[0] || confirmedData)
+        );
+        if (
+          (confirmedStatus.workflowStatusCode && confirmedStatus.workflowStatusCode !== RM_WORKFLOW_CODES.BO_PENDING) ||
+          (!confirmedStatus.workflowStatusCode && Number(confirmedStatus.legacyStatus) !== 2) ||
+          (confirmedStatus.legacyStatus !== null && Number(confirmedStatus.legacyStatus) !== 2)
+        ) {
+          throw new Error('Application submission could not be confirmed by the server. Please refresh and try again.');
+        }
+
+        saveApplication(appId, { status: confirmedStatus.workflowStatusName || 'Logged to HO' });
         setOtpStep('success');
       }, { message: 'Submitting application...' });
     } catch (err) {

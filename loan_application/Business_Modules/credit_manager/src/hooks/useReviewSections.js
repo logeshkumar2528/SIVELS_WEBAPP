@@ -86,7 +86,7 @@ export function useReviewSections(customerId, isUnsecured = false) {
   }, []);
 
   const reload = useCallback(async () => {
-    if (!customerId) return;
+    if (!customerId) return false;
     setLoading(true);
     try {
       const data = await creditManagerService.getReviewSections(customerId);
@@ -101,11 +101,14 @@ export function useReviewSections(customerId, isUnsecured = false) {
       });
       commit(next);
       setError('');
+      return true;
     } catch (err) {
       if (err?.response?.status === 404) {
         commit({});
+        return true;
       } else {
         setError(getErrorMessage(err, 'Unable to load the section review.'));
+        return false;
       }
     } finally {
       setLoading(false);

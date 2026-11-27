@@ -88,7 +88,7 @@ export const fmtDateTime = (v) => {
 
 /* ── Export Hook ───────────────────────────────────────────────────── */
 
-export function usePrintAndPdf(ref, { title, fileName, onPdfGenerated }) {
+export function usePrintAndPdf(ref, { title, fileName, onPdfGenerated, downloadAfterGenerate = true }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
 
@@ -136,14 +136,15 @@ export function usePrintAndPdf(ref, { title, fileName, onPdfGenerated }) {
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, width, imgHeight, undefined, 'FAST');
       }
       if (pdf && onPdfGenerated) await onPdfGenerated(pdf, fileName);
-      pdf?.save(fileName);
+      if (pdf && downloadAfterGenerate) pdf.save(fileName);
     } catch (err) {
       console.error(`[${title}] Failed to generate PDF:`, err);
-      setExportError('Failed to generate PDF. Please try again.');
+      const backendMessage = err?.response?.data?.message || err?.response?.data?.Message;
+      setExportError(backendMessage || err?.message || 'Failed to generate PDF. Please try again.');
     } finally {
       setIsExporting(false);
     }
-  }, [ref, title, fileName, onPdfGenerated]);
+  }, [ref, title, fileName, onPdfGenerated, downloadAfterGenerate]);
 
   return { handlePrint, handleDownloadPdf, isExporting, exportError };
 }

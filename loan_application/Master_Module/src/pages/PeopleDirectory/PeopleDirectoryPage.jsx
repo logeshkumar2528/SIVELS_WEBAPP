@@ -30,6 +30,7 @@ import { getAllAMS, getAMSById, getAMSDistrictsByAmsId } from '../../api/amsApi'
 import { getAllCreditManagers, getCreditManagerById } from '../../api/creditManagerApi';
 import { getAllCreditHeads, getCreditHeadById } from '../../api/creditHeadApi';
 import { agentCustomerService } from '../../../../Core/src/services/agentCustomerService';
+import { extractWorkflowStatus } from '../../../../Core/src/utils/applicationWorkflowStatus';
 import { selectLatestCustomerPhotoDoc } from '../../../../Core/src/utils/documentTypeHelper';
 import { getProfileImageUrl, getDocumentUrl, buildFileUrl } from '../../utils/profileImageHelper';
 import { resolveApplicationOwnership } from '../../../../Core/src/utils/ownershipHelper';
@@ -179,33 +180,6 @@ const formatDob = (dob) => {
   } catch {
     return String(dob);
   }
-};
-
-const normalizeApplicationStatus = (value, statusName = '') => {
-  const named = String(statusName || '').trim().toLowerCase();
-  if (named.includes('approved')) return 'Approved';
-  if (named.includes('returned') || named.includes('reject')) return 'Returned';
-  if (named.includes('review')) return 'Under Review';
-  if (named.includes('pending') || named.includes('progress')) return 'Pending';
-  if (named.includes('new') || named.includes('draft')) return 'New';
-  if (named.includes('disburs')) return 'Disbursed';
-
-  if (value !== null && value !== undefined && value !== '') {
-    const numeric = Number(value);
-    if (!Number.isNaN(numeric)) {
-      if (numeric === 6) return 'Returned';
-      if (numeric === 5) return 'Rejected';
-      if (numeric === 4) return 'Approved';
-      if (numeric === 3) return 'Under Review';
-      if (numeric === 2) return 'Logged to HO';
-      if (numeric === 1) return 'Pending';
-      if (numeric === 0) return 'New';
-    }
-  }
-
-  const raw = String(value || '').trim();
-  if (!raw || raw.toLowerCase() === 'draft') return 'New';
-  return raw.replace(/^./, (letter) => letter.toUpperCase());
 };
 
 const isCustomerEditable = (record) => {
@@ -1888,7 +1862,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               ? ownership.agentName
               : (read(application, ['agentName', 'AgentName']) || agent.name || '—');
 
-            const rawStatus = read(application, ['status', 'applicationStatus', 'ApplicationStatus', 'Status'], '0');
+            const workflowStatus = extractWorkflowStatus(application);
+            const rawStatus = workflowStatus.legacyStatus ?? read(application, ['status', 'Status'], '0');
 
             return {
               id: read(application, ['agentCustomerId', 'AgentCustomerId', 'applicationId', 'id']),
@@ -1907,10 +1882,10 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
               amount: money(read(application, ['expectedLoanAmount', 'ExpectedLoanAmount', 'disbursedAmount', 'loanAmount', 'requestedAmount'])),
               remarks: read(application, ['remarks', 'Remarks'], '—'),
               rawStatus,
-              status: normalizeApplicationStatus(
-                rawStatus,
-                read(application, ['statusName', 'StatusName'])
-              ),
+              workflowStatus,
+              workflowStatusCode: workflowStatus.workflowStatusCode,
+              workflowStatusName: workflowStatus.workflowStatusName,
+              status: workflowStatus.workflowStatusName || 'Status unavailable',
               isActive: application.isActive ?? application.IsActive ?? true,
               createdAt: read(application, ['createdAt', 'CreatedAt', 'createdDate']),
               updatedAt: read(application, ['modifiedAt', 'ModifiedAt', 'updatedAt', 'createdAt', 'createdDate']),
@@ -2976,8 +2951,8 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                         <small>{customer.rmName || '—'}</small>
                       </td>
                       <td>
-                        <span className={`status ${String(customer.status || 'new').toLowerCase().replace(/\s+/g, '-')}`}>
-                          {customer.status}
+                        <span className={`status ${String(customer.workflowStatusName || 'Status unavailable').toLowerCase().replace(/\s+/g, '-')}`}>
+                          {customer.workflowStatusName || 'Status unavailable'}
                         </span>
                       </td>
                       <td>
@@ -3112,7 +3087,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                       {selectedApplication.customerCode || `APP #${selectedApplication.id}`}
                     </span>
                     <span className="exec-header-status-badge active">
-                      {selectedApplication.status}
+                      {selectedApplication.workflowStatusName || 'Status unavailable'}
                     </span>
                   </div>
                 </div>
@@ -3169,7 +3144,7 @@ export function PeopleDirectoryPage({ roleKey = 'agent' }) {
                   </div>
                   <div className="exec-field">
                     <span className="exec-field-label">Application Status</span>
-                    <span className="exec-field-value">{selectedApplication.status || '—'}</span>
+                    <span className="exec-field-value">{selectedApplication.workflowStatusName || 'Status unavailable'}</span>
                   </div>
                 </div>
               </div>

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Users, ClipboardList, Send, Banknote, Building2 } from 'lucide-react'
 import { agentCustomerService } from '../../../../../../Core/src/services/agentCustomerService'
+import { extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
+import { WORKFLOW_STATUS_CODES } from '../../utils/workflowStatusDisplay'
 import './StatCards.css'
 
 function StatCards({ activeSection, onTotalSubmittedClick }) {
@@ -23,7 +25,12 @@ function StatCards({ activeSection, onTotalSubmittedClick }) {
       try {
         const data = await agentCustomerService.getAllCustomers()
         const allCustomers = (Array.isArray(data) ? data : data?.data || data?.items || data?.result || data?.list || [])
-        const myCustomers = allCustomers.filter(c => isCustomerOwnedByAgent(c, agentId))
+         const myCustomers = allCustomers
+           .filter(c => isCustomerOwnedByAgent(c, agentId))
+           .map((customer) => ({
+             ...customer,
+             workflowStatus: extractWorkflowStatus(customer),
+           }))
         setCustomers(myCustomers)
       } catch (err) {
         console.error("Failed to load customers for stats", err)
@@ -36,14 +43,13 @@ function StatCards({ activeSection, onTotalSubmittedClick }) {
 
   const today = new Date().toISOString().split('T')[0]
   const todayCustomers = customers.filter(c => (c.createdAt || '').startsWith(today)).length
-  const pendingToRm = customers.filter(c => {
-    const s = String(c.status ?? '').toLowerCase()
-    return s.includes('pending') || s.includes('draft')
-  }).length
-  const pendingToBackoffice = customers.filter(c => {
-    const status = String(c.status ?? '').toLowerCase()
-    return status.includes('approved') || status.includes('backoffice') || status.includes('back office')
-  }).length
+  const pendingToRm = customers.filter(
+    (customer) => customer.workflowStatus?.workflowStatusCode === WORKFLOW_STATUS_CODES.RM_VERIFICATION_PENDING
+  ).length
+  const pendingToBackoffice = customers.filter((customer) => [
+    WORKFLOW_STATUS_CODES.BO_VERIFICATION_PENDING,
+    WORKFLOW_STATUS_CODES.BO_VERIFICATION_IN_PROGRESS,
+  ].includes(customer.workflowStatus?.workflowStatusCode)).length
   const totalSubmitted = customers.length
 
   const stats = [

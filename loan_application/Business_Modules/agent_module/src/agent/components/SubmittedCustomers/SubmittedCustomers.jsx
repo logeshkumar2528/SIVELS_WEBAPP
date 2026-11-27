@@ -8,9 +8,10 @@ import {
   selectLatestUpdatedCustomerPhotoRejection,
 } from '../../../../../../Core/src/utils/documentTypeHelper'
 import { formatDateTime } from '../../../../../../Core/src/utils/dateHelper'
+import { extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { isCustomerOwnedByAgent } from '../../utils/agentOwnershipHelper'
-import { normalizeApplicationStatus } from '../../../../../rm_modules/src/utils/rmContext'
+import { getWorkflowStatusPresentation } from '../../utils/workflowStatusDisplay'
 import ViewCustomerModal from '../ViewCustomerModal/ViewCustomerModal'
 import './SubmittedCustomers.css'
 
@@ -33,16 +34,25 @@ function formatCurrency(value) {
 }
 
 function StatusBadge({ status }) {
-  const value = status || 'Unknown'
-  const normalized = String(value).toLowerCase()
-  const isReturned = normalized.includes('return') || normalized.includes('reject')
-  const isApproved = normalized.includes('approve') || normalized.includes('success') || normalized.includes('logged to ho')
-  const isReview = normalized.includes('review')
-  const isPending = normalized.includes('pending') || normalized.includes('draft')
-  const Icon = isReturned ? RotateCcw : isApproved ? CheckCircle2 : isReview ? RefreshCw : isPending ? Clock : CheckCircle2
-  const type = isReturned ? 'returned' : isApproved ? 'approved' : isReview ? 'review' : isPending ? 'pending' : 'submitted'
+  const presentation = getWorkflowStatusPresentation(status)
+  const Icon = presentation.badgeType === 'returned-rm'
+    ? RotateCcw
+    : presentation.badgeType === 'under-review'
+      ? RefreshCw
+      : presentation.badgeType === 'pending-rm'
+        ? Clock
+        : CheckCircle2
+  const type = presentation.badgeType === 'pending-rm'
+    ? 'pending'
+    : presentation.badgeType === 'under-review'
+      ? 'review'
+      : presentation.badgeType === 'returned-rm'
+        ? 'returned'
+        : presentation.badgeType === 'approved-rm'
+          ? 'approved'
+          : 'submitted'
 
-  return <span className={`submitted-status submitted-status--${type}`}><Icon size={14} /> {value}</span>
+  return <span className={`submitted-status submitted-status--${type}`}><Icon size={14} /> {presentation.displayName}</span>
 }
 
 function SubmittedCustomers() {
@@ -103,10 +113,7 @@ function SubmittedCustomers() {
           .sort((a, b) => new Date(b.createdAt || b.CreatedAt || 0) - new Date(a.createdAt || a.CreatedAt || 0))
           .map((customer) => ({
             ...customer,
-            status: normalizeApplicationStatus(
-              customer.status ?? customer.Status,
-              customer.statusName ?? customer.StatusName
-            ),
+            workflowStatus: extractWorkflowStatus(customer),
           }))
         if (active) setCustomers(agentCustomers)
       } catch (loadError) {
@@ -307,7 +314,7 @@ function SubmittedCustomers() {
                     <td>{customer.mobileNumber || customer.MobileNumber || '-'}</td>
                     <td>{formatCurrency(customer.expectedLoanAmount || customer.ExpectedLoanAmount)}</td>
                     <td>{formatDate(customer.createdAt || customer.CreatedAt)}</td>
-                    <td><StatusBadge status={customer.status || customer.Status} /></td>
+                    <td><StatusBadge status={customer.workflowStatus} /></td>
                     <td>
                       <button type="button" className="submitted-view-button" onClick={() => setSelectedCustomer(customer)}>
                         <Eye size={15} /> View Details

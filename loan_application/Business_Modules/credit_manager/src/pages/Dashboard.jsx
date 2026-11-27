@@ -15,18 +15,19 @@ import {
   rmAgentColumn,
   statusColumn,
 } from '../components/applicationColumns';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, summarizeAmount } from '../utils/formatters';
 
 const RECENT_LIMIT = 5;
 const recentColumns = [applicationNoColumn, customerColumn, productColumn, amountColumn, rmAgentColumn, statusColumn];
 
-function sumAmount(list) {
-  return list.reduce((total, app) => total + (Number(app.expectedLoanAmount) || 0), 0);
+function formatAggregate(summary, suffix = '') {
+  if (!summary.complete) return 'Amount unavailable';
+  return `${formatCurrency(summary.total)}${suffix ? ` ${suffix}` : ''}`;
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { applications, pending, approved, rejected, counts, loading, error, refetch } = useCreditApplications();
+  const { applications, received, pending, approved, rejected, counts, loading, error, refetch } = useCreditApplications();
 
   const FileTextIcon = iconMap['FileText'];
   const ClockIcon = iconMap['Clock'];
@@ -39,11 +40,11 @@ export default function Dashboard() {
   const RefreshCwIcon = iconMap['RefreshCw'] || iconMap['RotateCcw'];
 
   const amounts = useMemo(() => ({
-    received: sumAmount(applications),
-    pending: sumAmount(pending),
-    approved: sumAmount(approved),
-    rejected: sumAmount(rejected),
-  }), [applications, pending, approved, rejected]);
+    received: summarizeAmount(received, 'expectedLoanAmount'),
+    pending: summarizeAmount(pending, 'expectedLoanAmount'),
+    approved: summarizeAmount(approved, 'sanctionedLoanAmount'),
+    rejected: summarizeAmount(rejected, 'expectedLoanAmount'),
+  }), [received, pending, approved, rejected]);
 
   const recentApps = applications.slice(0, RECENT_LIMIT);
 
@@ -72,7 +73,7 @@ export default function Dashboard() {
           title="Received Applications"
           value={counts.received}
           description="Sent by Back Office"
-          trend={`${formatCurrency(amounts.received)} Total Value`}
+          trend={formatAggregate(amounts.received, 'Total Value')}
           trendDirection="neutral"
           variant="default"
           onClick={() => navigate(ROUTES.RECEIVED)}
@@ -83,7 +84,7 @@ export default function Dashboard() {
           title="Pending Review"
           value={counts.pending}
           description="Awaiting Credit Decision"
-          trend={`${formatCurrency(amounts.pending)} In Review`}
+          trend={formatAggregate(amounts.pending, 'In Review')}
           trendDirection="neutral"
           variant="warning"
           onClick={() => navigate(ROUTES.PENDING)}
@@ -94,7 +95,7 @@ export default function Dashboard() {
           title="Approved Applications"
           value={counts.approved}
           description="Credit Approved"
-          trend={`${formatCurrency(amounts.approved)} Approved`}
+          trend={formatAggregate(amounts.approved, 'Sanctioned')}
           trendDirection="up"
           variant="success"
           onClick={() => navigate(ROUTES.APPROVED)}
@@ -105,7 +106,7 @@ export default function Dashboard() {
           title="Rejected Applications"
           value={counts.rejected}
           description="Declined in Credit Review"
-          trend={`${formatCurrency(amounts.rejected)} Rejected`}
+          trend={formatAggregate(amounts.rejected, 'Rejected')}
           trendDirection="down"
           variant="danger"
           onClick={() => navigate(ROUTES.REJECTED)}
@@ -128,15 +129,15 @@ export default function Dashboard() {
           <div className="bo-summary-amounts">
             <div className="bo-amount-item">
               <small>Total Received</small>
-              <strong>{formatCurrency(amounts.received)}</strong>
+              <strong>{formatAggregate(amounts.received)}</strong>
             </div>
             <div className="bo-amount-item is-success">
               <small>Approved Amount</small>
-              <strong>{formatCurrency(amounts.approved)}</strong>
+              <strong>{formatAggregate(amounts.approved)}</strong>
             </div>
             <div className="bo-amount-item is-warning">
               <small>Pending Review</small>
-              <strong>{formatCurrency(amounts.pending)}</strong>
+              <strong>{formatAggregate(amounts.pending)}</strong>
             </div>
           </div>
         </div>

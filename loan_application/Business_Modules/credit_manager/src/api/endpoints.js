@@ -11,6 +11,9 @@ export const CREDIT_MANAGER_ENDPOINTS = {
 
   CUSTOMERS: '/AgentAddCustomer/my',
 
+  START_CREDIT_REVIEW: (agentCustomerId) =>
+    `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/start-credit-review`,
+
   CREDIT_APPROVE: (agentCustomerId) =>
     `/ApplicationWorkflow/${encodeURIComponent(agentCustomerId)}/credit-approve`,
   CREDIT_REJECT: (agentCustomerId) =>

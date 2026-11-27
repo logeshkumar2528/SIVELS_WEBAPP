@@ -53,6 +53,8 @@ const BADGE_CLASS_MAP = {
   verification:       'sidebar-badge--review',
   fieldInvest:        'sidebar-badge--pending',
   underwriting:       'sidebar-badge--underwriting',
+  escalated:          'sidebar-badge--review',
+  waiting:            'sidebar-badge--pending',
   approved:           'sidebar-badge--approved',
   rejected:           'sidebar-badge--return',
 };
