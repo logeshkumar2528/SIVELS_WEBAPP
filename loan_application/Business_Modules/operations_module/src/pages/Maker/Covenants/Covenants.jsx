@@ -1,7 +1,6 @@
 import {
   Check,
   ChevronLeft,
-  ChevronRight,
   Download,
   PencilLine,
   Plus,
@@ -13,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { downloadDocument } from '../../../../../../Core/src/utils/documentFileActions';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
+import OperationsWorkflowSteps from '../../../components/OperationsWorkflowSteps';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import { saveCovenantDocument } from '../../../services/covenantDocumentStore';
 import {
@@ -22,15 +22,6 @@ import {
   operationsCovenantDetailsService,
 } from '../../../services/operationsCovenantDetailsService';
 import './Covenants.css';
-
-const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
-  { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
-  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
-  { id: 'covenants', label: 'Covenants', active: true, route: ROUTES.MAKER_COVENANTS },
-  { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
-  { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
-];
 
 const OTC_STATUS = {
   HOLD: 'hold',
@@ -234,26 +225,6 @@ function buildOtcPayload(form, {
   else payload.createdBy = userId;
 
   return payload;
-}
-
-function WorkflowSteps({ navigate, applicationId }) {
-  return (
-    <nav className="operations-covenants-steps" aria-label="Application workflow steps">
-      {WORKFLOW_STEPS.map((step, index) => (
-        <button
-          key={step.id}
-          type="button"
-          className={['operations-covenants-step', step.active ? 'is-active' : ''].join(' ').trim()}
-          aria-current={step.active ? 'step' : undefined}
-          disabled={!step.route}
-          onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
-        >
-          <span className="operations-covenants-step-number">{index + 1}</span>
-          <span>{step.label}</span>
-        </button>
-      ))}
-    </nav>
-  );
 }
 
 function BooleanIndicator({ value, label }) {
@@ -640,13 +611,10 @@ export default function Covenants() {
   return (
     <OperationsLayout title="Covenants" subtitle="Operations Maker workflow">
       <div className="operations-covenants-page">
-        <nav className="operations-covenants-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => navigate(ROUTES.MAKER_DASHBOARD)}>Operations Maker</button>
-          <ChevronRight size={15} aria-hidden="true" />
-          <span>Covenants</span>
-        </nav>
-
-        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
+        <OperationsWorkflowSteps
+          activeStepId="covenants"
+          applicationId={applicationId}
+        />
 
         {toast && (
           <div
@@ -860,18 +828,13 @@ export default function Covenants() {
                   <ChevronLeft size={15} aria-hidden="true" />
                   Back
                 </button>
-                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" onClick={resetForm}>
-                  Clear
-                </button>
-                <button type="submit" className="operations-covenants-button operations-covenants-button--primary">
-                  <Plus size={15} aria-hidden="true" />
-                  {editingId != null ? 'Update Covenant' : 'Add Covenant'}
-                </button>
-                <button type="button" className="operations-covenants-button operations-covenants-button--secondary" disabled title="Permanent save is not connected yet.">
-                  Save as Draft
-                </button>
-                <button type="button" className="operations-covenants-button operations-covenants-button--primary" disabled title="Permanent save is not connected yet.">
-                  Save Covenant
+                <button
+                  type="button"
+                  className="operations-covenants-button operations-covenants-button--primary"
+                  onClick={handleSaveCovenant}
+                  disabled={savingAll || saving || loading || (!formIsDirty && covenantRecords.length === 0)}
+                >
+                  {savingAll ? 'Saving…' : 'Save Covenant'}
                 </button>
               </div>
             </form>
@@ -880,8 +843,9 @@ export default function Covenants() {
           <section className="operations-covenants-panel operations-covenants-list-panel" aria-labelledby="operations-covenants-list-title">
             <div className="operations-covenants-panel-heading">
               <div>
-                <h2 id="operations-covenants-list-title">Covenant List</h2>
-                <p>{loading ? 'Loading covenants…' : 'Active covenants for this application.'}</p>
+                <h2 id="operations-covenants-list-title">
+                  {loading ? 'Covenant List (Loading…)' : 'Covenant List'}
+                </h2>
               </div>
             </div>
 

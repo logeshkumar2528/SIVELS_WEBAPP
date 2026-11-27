@@ -6,79 +6,6 @@
   box-sizing: border-box;
 }
 
-.operations-loan-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 8px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.operations-loan-breadcrumb button {
-  padding: 0;
-  color: var(--color-primary);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font: inherit;
-}
-
-.operations-loan-breadcrumb button:hover {
-  text-decoration: underline;
-}
-
-.operations-loan-steps {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 8px;
-  margin: 8px 0 18px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.operations-loan-step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 43px;
-  padding: 8px 10px;
-  color: #718078;
-  background: #f4f8f4;
-  border: 1px solid #dfe9e1;
-  border-radius: 10px;
-  cursor: not-allowed;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.operations-loan-step.is-active {
-  color: #174a2f;
-  background: #d9e9de;
-  border-color: #8fbd9d;
-  cursor: default;
-}
-
-.operations-loan-step-number {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  place-items: center;
-  color: #527964;
-  background: #e3eee5;
-  border-radius: 50%;
-  font-size: 10px;
-}
-
-.operations-loan-step.is-active .operations-loan-step-number {
-  color: #ffffff;
-  background: #174a2f;
-}
-
 .operations-loan-form {
   display: flex;
   flex-direction: column;
@@ -318,11 +245,6 @@
   .operations-loan-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .operations-loan-steps {
-    grid-template-columns: repeat(5, minmax(150px, 1fr));
-  }
-
 }
 
 @media (max-width: 680px) {

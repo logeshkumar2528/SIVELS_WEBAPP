@@ -7,20 +7,12 @@ import { getStoredUser } from '../../../../../../Core/src/auth/session';
 import { formatIndianAmount } from '../../../../../../Core/src/utils/amountHelper';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
+import OperationsWorkflowSteps from '../../../components/OperationsWorkflowSteps';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import operationsRepaymentScheduleService, {
   getRepaymentScheduleApiErrorMessage,
 } from '../../../services/operationsRepaymentScheduleService';
 import './RepaymentSchedule.css';
-
-const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
-  { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
-  { id: 'repayment-schedule', label: 'Repayment Schedule', active: true, route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
-  { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
-  { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
-  { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
-];
 
 const SUMMARY_FIELDS = [
   ['Schedule Principal', 'loanAmount', 'amount'],
@@ -266,25 +258,6 @@ function SummaryField({ label, value, type }) {
   );
 }
 
-function WorkflowSteps({ navigate, applicationId }) {
-  return (
-    <nav className="operations-repayment-steps" aria-label="Application workflow steps">
-      {WORKFLOW_STEPS.map((step, index) => (
-        <button
-          key={step.id}
-          type="button"
-          className={['operations-repayment-step', step.active ? 'is-active' : ''].join(' ').trim()}
-          aria-current={step.active ? 'step' : undefined}
-          onClick={() => navigate(buildApplicationRoute(step.route, applicationId))}
-        >
-          <span className="operations-repayment-step-number">{index + 1}</span>
-          <span>{step.label}</span>
-        </button>
-      ))}
-    </nav>
-  );
-}
-
 export default function RepaymentSchedule() {
   const navigate = useNavigate();
   const { applicationId, application, profile, profileLoading, profileError } = useOperationsApplication();
@@ -461,13 +434,10 @@ export default function RepaymentSchedule() {
   return (
     <OperationsLayout title="Repayment Schedule" subtitle="Operations Maker workflow">
       <div className="operations-repayment-page">
-        <nav className="operations-repayment-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => navigate(buildApplicationRoute(ROUTES.MAKER_DASHBOARD, applicationId))}>Operations Maker</button>
-          <span aria-hidden="true">›</span>
-          <span>Repayment Schedule</span>
-        </nav>
-
-        <WorkflowSteps navigate={navigate} applicationId={applicationId} />
+        <OperationsWorkflowSteps
+          activeStepId="repayment-schedule"
+          applicationId={applicationId}
+        />
 
         {savedState.status === 'loading' && <div className="operations-repayment-state" role="status">Loading repayment schedule…</div>}
         {savedState.error && (
@@ -507,7 +477,6 @@ export default function RepaymentSchedule() {
           <div className="operations-repayment-panel-heading">
             <div>
               <h2 id="operations-repayment-summary-title">Repayment Summary</h2>
-              <p>Financial values are read-only and supplied by the repayment schedule backend.</p>
             </div>
             <div className="operations-repayment-actions">
               <button type="button" className="operations-repayment-button operations-repayment-button--secondary" onClick={handleVerify} disabled={actionsDisabled || verifyState.status === 'loading'}>
@@ -527,7 +496,6 @@ export default function RepaymentSchedule() {
           <div className="operations-repayment-panel-heading">
             <div>
               <h2 id="operations-repayment-bpi-title">BPI Details</h2>
-              <p>BPI values are displayed directly from the backend schedule response.</p>
             </div>
           </div>
           <div className="operations-repayment-summary-grid operations-repayment-summary-grid--bpi">
@@ -539,7 +507,6 @@ export default function RepaymentSchedule() {
           <div className="operations-repayment-panel-heading">
             <div>
               <h2 id="operations-repayment-table-title">Amortization Schedule</h2>
-              <p>{details.length ? `${details.length} backend-provided installments` : 'No installment rows are available.'}</p>
             </div>
           </div>
           <div className="operations-repayment-table-wrap">

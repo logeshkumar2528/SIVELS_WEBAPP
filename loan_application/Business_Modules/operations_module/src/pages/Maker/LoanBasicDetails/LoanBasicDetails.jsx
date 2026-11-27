@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import backOfficeService from '../../../../../back_office/src/back-office/api/backOfficeService';
@@ -6,6 +6,7 @@ import approvalDocumentService from '../../../../../../Core/src/features/approva
 import { LOGIN_PATH } from '../../../../../../Core/src/auth/authEvents';
 import { buildApplicationRoute, ROUTES } from '../../../config/routeConfig';
 import { useOperationsApplication } from '../../../context/OperationsApplicationContext';
+import OperationsWorkflowSteps from '../../../components/OperationsWorkflowSteps';
 import OperationsLayout from '../../../layouts/OperationsLayout';
 import { mastersLookupService } from '../../../services/mastersLookupService';
 import {
@@ -23,15 +24,6 @@ import {
   validateLoanBasicDetailsForm,
 } from './loanBasicDetailsPayload';
 import './LoanBasicDetails.css';
-
-const WORKFLOW_STEPS = [
-  { id: 'loan-basic-details', label: 'Loan Basic Details', active: true, route: ROUTES.MAKER_LOAN_BASIC_DETAILS },
-  { id: 'fees', label: 'Fees', route: ROUTES.MAKER_FEES },
-  { id: 'repayment-schedule', label: 'Repayment Schedule', route: ROUTES.MAKER_REPAYMENT_SCHEDULE },
-  { id: 'covenants', label: 'Covenants', route: ROUTES.MAKER_COVENANTS },
-  { id: 'mandate-details', label: 'Mandate Details', route: ROUTES.MAKER_MANDATE_DETAILS },
-  { id: 'cheque-details', label: 'Cheque Details', route: ROUTES.MAKER_CHEQUE_DETAILS },
-];
 
 const INITIAL_FORM = {
   division: '',
@@ -1109,27 +1101,10 @@ export default function LoanBasicDetails() {
   return (
     <OperationsLayout title="Loan Basic Details" subtitle="Operations Maker workflow">
       <div className="operations-loan-page">
-        <nav className="operations-loan-breadcrumb" aria-label="Breadcrumb">
-          <button type="button" onClick={() => navigate(buildApplicationRoute(ROUTES.MAKER_DASHBOARD, applicationId))}>Operations Maker</button>
-          <ChevronRight size={15} aria-hidden="true" />
-          <span>Loan Basic Details</span>
-        </nav>
-
-        <nav className="operations-loan-steps" aria-label="Application workflow steps">
-          {WORKFLOW_STEPS.map((step, index) => (
-            <button
-              key={step.id}
-              type="button"
-              className={['operations-loan-step', step.active ? 'is-active' : ''].join(' ').trim()}
-              aria-current={step.active ? 'step' : undefined}
-              disabled={!step.route}
-              onClick={() => step.route && navigate(buildApplicationRoute(step.route, applicationId))}
-            >
-              <span className="operations-loan-step-number">{index + 1}</span>
-              <span>{step.label}</span>
-            </button>
-          ))}
-        </nav>
+        <OperationsWorkflowSteps
+          activeStepId="loan-basic-details"
+          applicationId={applicationId}
+        />
 
         {applicationDataState.loading && (
           <div className="operations-state-card" role="status">

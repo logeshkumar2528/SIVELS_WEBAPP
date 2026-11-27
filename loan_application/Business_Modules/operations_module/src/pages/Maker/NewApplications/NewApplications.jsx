@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Search } from 'lucide-react';
+import { Eye, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { resolveApiUrl } from '../../../../../../Core/src/api/apiConfig';
 import useAuthedObjectUrl from '../../../../../../Core/src/auth/useAuthedObjectUrl';
@@ -81,6 +81,7 @@ function DocumentAction({ label, onClick }) {
       onClick={onClick}
       aria-label={`${label} document`}
     >
+      <Eye size={13} aria-hidden="true" />
       {label}
     </button>
   );
@@ -162,25 +163,8 @@ export default function NewApplications() {
   const openDocument = (application, type) => setDocument({ application, type });
 
   return (
-    <OperationsLayout title="New Applications" subtitle="Approved applications awaiting Operations verification">
+    <OperationsLayout title="New Applications">
       <div className="operations-new-applications-page">
-        <div className="operations-new-applications-heading">
-          <div>
-            <p className="operations-new-applications-eyebrow">OPERATIONS MAKER</p>
-            <h2>New Applications</h2>
-            <p>Review approved applications and start verification when ready.</p>
-          </div>
-          <button
-            type="button"
-            className="operations-new-applications-refresh"
-            onClick={loadApplications}
-            disabled={loading}
-          >
-            <RefreshCw size={15} aria-hidden="true" />
-            Refresh
-          </button>
-        </div>
-
         <section className="operations-new-applications-card" aria-label="New Applications list">
           <div className="operations-new-applications-toolbar">
             <label className="operations-new-applications-search">

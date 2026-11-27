@@ -1,77 +1,11 @@
 .operations-mandate-page {
   width: 100%;
-  max-width: 1600px;
+  max-width: 1360px;
+  min-width: 0;
   margin: 0 auto;
-  padding: 18px 24px 28px;
+  padding: 4px 0 24px;
+  box-sizing: border-box;
   color: #173b2b;
-}
-
-.operations-mandate-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: #6f8178;
-  font-size: 12px;
-}
-
-.operations-mandate-breadcrumb button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #0b6843;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-}
-
-.operations-mandate-steps {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.operations-mandate-step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 8px 10px;
-  border: 1px solid #d9e6dd;
-  border-radius: 7px;
-  background: #f7faf8;
-  color: #60766a;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.operations-mandate-step:disabled {
-  cursor: not-allowed;
-  opacity: .62;
-}
-
-.operations-mandate-step.is-active {
-  border-color: #0d6b46;
-  background: #0d6b46;
-  color: #fff;
-}
-
-.operations-mandate-step-number {
-  display: inline-grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 50%;
-  background: #dceee3;
-  color: #0d6b46;
-  font-size: 11px;
-}
-
-.operations-mandate-step.is-active .operations-mandate-step-number {
-  background: #fff;
 }
 
 .operations-mandate-form {
@@ -601,13 +535,7 @@
 
 @media (max-width: 760px) {
   .operations-mandate-page {
-    padding: 14px 12px 22px;
-  }
-
-  .operations-mandate-steps {
-    overflow-x: auto;
-    grid-template-columns: repeat(5, minmax(145px, 1fr));
-    padding-bottom: 3px;
+    padding: 4px 0 16px;
   }
 
   .operations-mandate-document-row,
