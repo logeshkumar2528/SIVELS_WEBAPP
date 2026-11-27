@@ -1,5 +1,6 @@
 import {
   Check,
+  ChevronLeft,
   ChevronRight,
   Download,
   PencilLine,
@@ -851,7 +852,7 @@ export default function Covenants() {
                   >
                     Cancel Edit
                   </button>
-                </div>
+                )}
               </div>
 
               <div className="operations-covenants-form-actions">
@@ -864,7 +865,7 @@ export default function Covenants() {
                 </button>
                 <button type="submit" className="operations-covenants-button operations-covenants-button--primary">
                   <Plus size={15} aria-hidden="true" />
-                  {editingFrontendId ? 'Update Covenant' : 'Add Covenant'}
+                  {editingId != null ? 'Update Covenant' : 'Add Covenant'}
                 </button>
                 <button type="button" className="operations-covenants-button operations-covenants-button--secondary" disabled title="Permanent save is not connected yet.">
                   Save as Draft
