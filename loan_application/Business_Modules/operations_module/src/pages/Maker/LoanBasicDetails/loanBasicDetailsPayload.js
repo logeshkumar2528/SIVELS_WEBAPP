@@ -22,6 +22,17 @@ function toIdOrNull(value) {
   return number !== null && number > 0 ? number : null;
 }
 
+function mapResponseAmount(record, ...keys) {
+  if (!record || typeof record !== 'object') return { present: false, value: undefined };
+  const key = keys.find((candidate) => Object.prototype.hasOwnProperty.call(record, candidate));
+  if (!key) return { present: false, value: undefined };
+  const value = record[key];
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { present: true, value: null };
+  }
+  return { present: true, value: String(value) };
+}
+
 export function toApiDateTime(value) {
   if (value === undefined || value === null || String(value).trim() === '') return null;
   const text = String(value).trim();
@@ -56,7 +67,7 @@ export function getRecordId(record, ...keys) {
 
 export function mapLoanBasicDetailsToForm(record) {
   if (!record) return {};
-  return {
+  const form = {
     division: String(readValue(record, 'divisionId', 'DivisionId') ?? ''),
     interestCapsBasis: String(readValue(record, 'dayBasisId', 'DayBasisId') ?? ''),
     repaymentMode: String(readValue(record, 'paymentMethodId', 'PaymentMethodId') ?? ''),
@@ -99,11 +110,22 @@ export function mapLoanBasicDetailsToForm(record) {
         ? String(readValue(record, 'margin', 'Margin'))
         : '',
     maturityDate: fromApiDate(readValue(record, 'maturityDate', 'MaturityDate')),
-    netLoanAmount:
-      readValue(record, 'netLoanAmount', 'NetLoanAmount') != null
-        ? String(readValue(record, 'netLoanAmount', 'NetLoanAmount'))
-        : '',
   };
+
+  const financialFields = [
+    ['loanAmount', 'loanAmount', 'LoanAmount'],
+    ['disbursementAmount', 'firstDisbursementAmount', 'FirstDisbursementAmount'],
+    ['totalDisbursements', 'totalDisbursements', 'TotalDisbursements'],
+    ['netLoanAmount', 'netLoanAmount', 'NetLoanAmount'],
+    ['remainingDisbursementAmount', 'remainingDisbursementAmount', 'RemainingDisbursementAmount'],
+  ];
+
+  financialFields.forEach(([field, ...keys]) => {
+    const mapped = mapResponseAmount(record, ...keys);
+    if (mapped.present) form[field] = mapped.value;
+  });
+
+  return form;
 }
 
 export function mapPenaltyToForm(record) {

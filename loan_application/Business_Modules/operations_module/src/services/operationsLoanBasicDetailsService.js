@@ -40,10 +40,14 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
 }
 
 export const operationsLoanBasicDetailsService = {
-  async getByCustomer(agentCustomerId) {
+  async getByCustomer(agentCustomerId, applicationProductDetailsId) {
     try {
+      const productQuery =
+        applicationProductDetailsId === undefined || applicationProductDetailsId === null
+          ? ''
+          : `?applicationProductDetailsId=${encodeURIComponent(applicationProductDetailsId)}`;
       const response = await axiosInstance.get(
-        `/OperationsLoanBasicDetails/by-customer/${encodeURIComponent(agentCustomerId)}`
+        `/OperationsLoanBasicDetails/by-customer/${encodeURIComponent(agentCustomerId)}${productQuery}`
       );
       return firstRecord(response.data);
     } catch (error) {

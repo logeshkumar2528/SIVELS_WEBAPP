@@ -92,6 +92,7 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
     const workflowRoutes = [
       ROUTES.MAKER_LOAN_BASIC_DETAILS,
       ROUTES.MAKER_FEES,
+      ROUTES.MAKER_REPAYMENT_SCHEDULE,
       ROUTES.MAKER_COVENANTS,
       ROUTES.MAKER_MANDATE_DETAILS,
       ROUTES.MAKER_CHEQUE_DETAILS,
@@ -120,6 +121,7 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
             || pathname === ROUTES.MAKER_PENDING_APPLICATIONS
             || pathname === ROUTES.MAKER_LOAN_BASIC_DETAILS
             || pathname === ROUTES.MAKER_FEES
+            || pathname === ROUTES.MAKER_REPAYMENT_SCHEDULE
             || pathname === ROUTES.MAKER_COVENANTS
             || pathname === ROUTES.MAKER_MANDATE_DETAILS
             || pathname === ROUTES.MAKER_CHEQUE_DETAILS

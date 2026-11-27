@@ -6,6 +6,7 @@ import OperationsGuard from '../auth/OperationsGuard';
 import NewApplications from '../pages/Maker/NewApplications/NewApplications';
 import PendingApplications from '../pages/Maker/PendingApplications/PendingApplications';
 import LoanBasicDetails from '../pages/Maker/LoanBasicDetails/LoanBasicDetails';
+import RepaymentSchedule from '../pages/Maker/RepaymentSchedule/RepaymentSchedule';
 import Fees from '../pages/Maker/Fees/Fees';
 import Covenants from '../pages/Maker/Covenants/Covenants';
 import MandateDetails from '../pages/Maker/MandateDetails/MandateDetails';
@@ -93,6 +94,16 @@ export default function AppRoutes() {
             <OperationsGuard allowedRoles={['MAKER']}>
               <OperationsApplicationGate title="Fees">
                 <Fees />
+              </OperationsApplicationGate>
+            </OperationsGuard>
+          }
+        />
+        <Route
+          path={ROUTES.MAKER_REPAYMENT_SCHEDULE}
+          element={
+            <OperationsGuard allowedRoles={['MAKER']}>
+              <OperationsApplicationGate title="Repayment Schedule">
+                <RepaymentSchedule />
               </OperationsApplicationGate>
             </OperationsGuard>
           }
