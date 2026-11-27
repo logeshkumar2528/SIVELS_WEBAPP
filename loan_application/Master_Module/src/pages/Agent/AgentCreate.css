@@ -1,7 +1,16 @@
 .agent-master-create-page {
   max-width: 1180px;
-  margin: 0 auto;
-  padding-bottom: 40px;
+  width: 100%;
+  margin: 72px auto 40px;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 560px) {
+  .agent-master-create-page {
+    margin: 48px 16px 32px;
+    padding: 16px;
+  }
 }
 
 .agent-master-form-card {
@@ -152,6 +161,16 @@
 
 .text-uppercase {
   text-transform: uppercase;
+}
+
+.agent-master-create-page .rm-active,
+.agent-master-form-card .rm-active {
+  display: flex;
+  justify-content: center;
+  margin: 24px auto 0;
+  width: calc(100% - 56px);
+  max-width: 720px;
+  box-sizing: border-box;
 }
 
 .agent-form-footer {

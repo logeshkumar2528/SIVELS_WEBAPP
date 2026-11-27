@@ -7,6 +7,16 @@
   padding: 28px max(24px, calc((100vw - 1440px) / 2 + 24px)) 40px;
 }
 
+.details-button.deactivate-button {
+  color: #a52d27;
+  border-color: #efbcb6;
+  background: #fffafa;
+}
+
+.details-button.deactivate-button:hover {
+  background: #fff0ee;
+}
+
 .people-dir-back-btn {
   display: inline-flex;
   align-items: center;

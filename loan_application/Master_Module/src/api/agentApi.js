@@ -20,6 +20,10 @@ export const updateAgent = async (id, payload) => {
   return response.data;
 };
 
+export const deactivateAgent = async (id) => {
+  await axiosInstance.delete(`/AgentMaster/${encodeURIComponent(id)}`);
+};
+
 export const uploadAgentAadhaar = async (agentId, file) => {
   const formData = new FormData();
   formData.append('file', file);

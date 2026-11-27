@@ -192,8 +192,11 @@
 }
 
 .create-user-form .rm-active {
-  margin-left: 30px;
-  margin-right: 30px;
+  display: flex;
+  justify-content: center;
+  margin: 24px auto 0;
+  width: calc(100% - 60px);
+  max-width: 720px;
 }
 
 .create-user-form .staff-role-select {

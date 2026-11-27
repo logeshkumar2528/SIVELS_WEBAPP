@@ -1,18 +1,40 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Eye, Pencil, Plus, Search, Users, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, Eye, Pencil, Plus, Power, RefreshCw, Search, Users, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../../../Core/src/api/apiFetch';
 import { API_BASE_URL } from '../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../Core/src/auth/tokenStore';
 import AuthImage from '../../../../Core/src/auth/AuthImage';
 import { getProfileImageUrl } from '../../../../Core/src/utils/profileImageHelper';
+import { deactivateInvestor } from '../../api/investorApi';
+import { MasterModal } from '../../components/masters/MasterModal/MasterModal';
 import { ExecutiveEmployeeRecordModal } from '../PeopleDirectory/PeopleDirectoryPage';
 import '../PeopleDirectory/PeopleDirectory.css';
+import '../masters/StatusRole/StatusRole.css';
 import './InvestorDirectory.css';
 
 const unwrap = (v) => (Array.isArray(v) ? v : v?.data || v?.value || []);
 const read = (r, keys, fallback = '—') =>
   keys.map((k) => r?.[k]).find((v) => v !== undefined && v !== null && v !== '') ?? fallback;
+
+const resolveIsActive = (item) => {
+  const rawActive = item?.isActive ?? item?.IsActive;
+  if (typeof rawActive === 'boolean') return rawActive;
+  if (typeof rawActive === 'number') return rawActive !== 0;
+  if (typeof rawActive === 'string') {
+    const text = rawActive.trim().toLowerCase();
+    if (['inactive', 'false', '0', 'deactivated', 'disabled'].includes(text)) return false;
+    if (['active', 'true', '1', 'enabled'].includes(text)) return true;
+  }
+  return true;
+};
+
+const getDeactivationErrorMessage = (error, fallback = 'Unable to deactivate this investor.') =>
+  error?.response?.data?.message
+  || error?.response?.data?.title
+  || error?.message
+  || fallback;
 
 export default function InvestorDirectory() {
   const navigate = useNavigate();
@@ -22,17 +44,31 @@ export default function InvestorDirectory() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [deactivationTarget, setDeactivationTarget] = useState(null);
+  const [deactivating, setDeactivating] = useState(false);
+
+  const loadInvestors = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const token = getAccessToken();
+      const response = await apiFetch(`${API_BASE_URL}/InvestorsMaster`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) throw new Error('Unable to load investors.');
+      const data = await response.json();
+      setRecords(unwrap(data));
+    } catch (loadError) {
+      setError(loadError.message || 'Unable to load investors.');
+      setRecords([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const token = getAccessToken();
-    apiFetch(`${API_BASE_URL}/InvestorsMaster`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Unable to load investors.'))))
-      .then((d) => setRecords(unwrap(d)))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
+    loadInvestors();
+  }, [loadInvestors]);
 
   const filtered = records.filter((r) =>
     `${read(r, ['investorCode', 'InvestorCode'], '')} ${read(r, ['fullName', 'FullName'], '')} ${read(r, ['mobileNumber', 'MobileNumber'], '')} ${read(r, ['emailAddress', 'EmailAddress'], '')}`
@@ -54,12 +90,30 @@ export default function InvestorDirectory() {
     dateJoined: read(r, ['dateJoined', 'DateJoined']),
     accountNumber: read(r, ['accountNumber', 'AccountNumber']),
     ifscCode: read(r, ['ifscCode', 'IfscCode']),
+    isActive: resolveIsActive(r),
     type: 'Investor',
   });
 
   const handlePreviewDocument = (title, rawPath, role, entityId, version) => {
     if (String(title).toLowerCase().includes('profile') || String(title).toLowerCase().includes('image')) {
       setPreviewImage({ title, url: getProfileImageUrl('Investor', entityId, version) });
+    }
+  };
+
+  const confirmDeactivation = async () => {
+    const investorId = read(deactivationTarget || {}, ['investorId', 'InvestorId', 'id'], '');
+    if (!investorId || deactivating) return;
+
+    setDeactivating(true);
+    try {
+      await deactivateInvestor(investorId);
+      toast.success(`${read(deactivationTarget, ['fullName', 'FullName'], 'Investor')} deactivated successfully.`);
+      setDeactivationTarget(null);
+      await loadInvestors();
+    } catch (requestError) {
+      toast.error(getDeactivationErrorMessage(requestError));
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -151,46 +205,58 @@ export default function InvestorDirectory() {
                   </td>
                 </tr>
               ) : filtered.length ? (
-                filtered.map((r, i) => (
-                  <tr key={read(r, ['investorId', 'InvestorId', 'id'], i)}>
-                    <td>
-                      <strong>{read(r, ['fullName', 'FullName'])}</strong>
-                      <small>{read(r, ['investorCode', 'InvestorCode'])}</small>
-                    </td>
-                    <td>
-                      <div>{read(r, ['emailAddress', 'EmailAddress'])}</div>
-                      <small>{read(r, ['mobileNumber', 'MobileNumber'])}</small>
-                    </td>
-                    <td>{read(r, ['branch', 'Branch', 'branchName', 'BranchName'])}</td>
-                    <td>
-                      <span className={`investor-status ${r.isActive === false ? 'inactive' : 'active'}`}>
-                        {r.isActive === false ? 'Inactive' : 'Active'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-buttons">
-                        <button
-                          type="button"
-                          className="details-button"
-                          onClick={() => setSelected(normalize(r))}
-                        >
-                          <Eye size={15} /> View
-                        </button>
-                        <button
-                          type="button"
-                          className="details-button edit-button"
-                          onClick={() =>
-                            navigate(
-                              `/create-user?type=investor&investorId=${read(r, ['investorId', 'InvestorId', 'id'], '')}`
-                            )
-                          }
-                        >
-                          <Pencil size={15} /> Edit
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((r, i) => {
+                  const active = resolveIsActive(r);
+                  return (
+                    <tr key={read(r, ['investorId', 'InvestorId', 'id'], i)}>
+                      <td>
+                        <strong>{read(r, ['fullName', 'FullName'])}</strong>
+                        <small>{read(r, ['investorCode', 'InvestorCode'])}</small>
+                      </td>
+                      <td>
+                        <div>{read(r, ['emailAddress', 'EmailAddress'])}</div>
+                        <small>{read(r, ['mobileNumber', 'MobileNumber'])}</small>
+                      </td>
+                      <td>{read(r, ['branch', 'Branch', 'branchName', 'BranchName'])}</td>
+                      <td>
+                        <span className={`investor-status ${active ? 'active' : 'inactive'}`}>
+                          {active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() => setSelected(normalize(r))}
+                          >
+                            <Eye size={15} /> View
+                          </button>
+                          <button
+                            type="button"
+                            className="details-button edit-button"
+                            onClick={() =>
+                              navigate(
+                                `/create-user?type=investor&investorId=${read(r, ['investorId', 'InvestorId', 'id'], '')}`
+                              )
+                            }
+                          >
+                            <Pencil size={15} /> Edit
+                          </button>
+                          {active && (
+                            <button
+                              type="button"
+                              className="details-button deactivate-button"
+                              onClick={() => setDeactivationTarget(r)}
+                            >
+                              <Power size={15} /> Deactivate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td className="empty-table" colSpan="5">
@@ -218,25 +284,56 @@ export default function InvestorDirectory() {
           role="presentation"
           onMouseDown={() => setPreviewImage(null)}
         >
-          <section
-            className="exec-record-dialog"
+          <div
+            className="exec-record-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="Profile image preview"
-            onMouseDown={(e) => e.stopPropagation()}
-            style={{ maxWidth: 560, padding: 24 }}
+            onMouseDown={(event) => event.stopPropagation()}
           >
-            <button type="button" onClick={() => setPreviewImage(null)} style={{ display: 'block', marginLeft: 'auto' }}>
-              Close
-            </button>
-            <AuthImage
-              src={previewImage.url}
-              alt={previewImage.title}
-              style={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', margin: '20px auto', objectFit: 'contain' }}
-            />
-          </section>
+            <div className="exec-record-header">
+              <strong>{previewImage.title || 'Profile Image'}</strong>
+              <button type="button" className="people-dir-search-clear" onClick={() => setPreviewImage(null)} aria-label="Close preview">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="exec-record-body" style={{ display: 'grid', placeItems: 'center' }}>
+              <AuthImage src={previewImage.url} alt={previewImage.title || 'Profile'} style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />
+            </div>
+          </div>
         </div>
       ) : null}
+
+      <MasterModal
+        isOpen={Boolean(deactivationTarget)}
+        onClose={() => !deactivating && setDeactivationTarget(null)}
+        title="Deactivate Investor"
+        subtitle="This action changes the user's active status."
+        icon={<Power size={20} />}
+      >
+        <p style={{ color: '#475569', marginTop: 0 }}>
+          Are you sure you want to deactivate{' '}
+          <strong>{read(deactivationTarget || {}, ['fullName', 'FullName'], 'this investor')}</strong>?
+        </p>
+        <div className="form-actions">
+          <button
+            type="button"
+            className="masters-btn-secondary"
+            onClick={() => setDeactivationTarget(null)}
+            disabled={deactivating}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="masters-btn-danger"
+            onClick={confirmDeactivation}
+            disabled={deactivating}
+          >
+            {deactivating ? <RefreshCw size={16} className="master-spin" /> : <Power size={16} />}
+            Deactivate
+          </button>
+        </div>
+      </MasterModal>
     </div>
   );
 }

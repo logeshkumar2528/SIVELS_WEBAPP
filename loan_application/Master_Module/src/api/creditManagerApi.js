@@ -20,6 +20,10 @@ export const updateCreditManager = async (id, payload) => {
   return response.data;
 };
 
+export const deactivateCreditManager = async (id) => {
+  await axiosInstance.delete(`/CreditManagerMaster/${encodeURIComponent(id)}`);
+};
+
 export const uploadCreditManagerAadhaar = async (id, file, isReplace = false) => {
   const formData = new FormData();
   formData.append('file', file);

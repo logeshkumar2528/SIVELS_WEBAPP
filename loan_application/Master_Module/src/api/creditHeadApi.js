@@ -29,11 +29,12 @@ export const updateCreditHead = async (id, payload) => {
   return response.data;
 };
 
-// 5. DELETE BY ID
+// 5. DELETE BY ID (soft deactivate)
 export const deleteCreditHead = async (id) => {
-  const response = await axiosInstance.delete(`/CreditHeadMaster/${encodeURIComponent(id)}`);
-  return response.data;
+  await axiosInstance.delete(`/CreditHeadMaster/${encodeURIComponent(id)}`);
 };
+
+export const deactivateCreditHead = deleteCreditHead;
 
 // 6. AADHAAR UPLOAD
 export const uploadCreditHeadAadhaar = async (id, file, isReplace = false) => {

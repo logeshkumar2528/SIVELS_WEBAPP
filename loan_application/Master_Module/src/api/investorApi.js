@@ -5,6 +5,10 @@ export const getInvestors = async () => (await axiosInstance.get('/InvestorsMast
 export const getInvestor = async (investorId) => (await axiosInstance.get(`/InvestorsMaster/${encodeURIComponent(investorId)}`)).data;
 export const updateInvestor = async (investorId, payload) => (await axiosInstance.put(`/InvestorsMaster/${encodeURIComponent(investorId)}`, payload)).data;
 
+export const deactivateInvestor = async (investorId) => {
+  await axiosInstance.delete(`/InvestorsMaster/${encodeURIComponent(investorId)}`);
+};
+
 export const uploadInvestorFile = async (investorId, file, kind) => {
   const data = new FormData();
   data.append('file', file);
