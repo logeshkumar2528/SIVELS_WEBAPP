@@ -1,5 +1,15 @@
 export const GST_TREATMENTS = Object.freeze(['Exclusive', 'Inclusive', 'Not Applicable']);
 
+export const FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT = 'Deduct from Disbursement';
+const MALFORMED_DEDUCT_FROM_DISBURSEMENT = 'Deduct from Disbursemen';
+export const FEE_SCHEDULE_METHOD_OPTIONS = Object.freeze([
+  { value: '', label: 'Select Fee Schedule Method' },
+  {
+    value: FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT,
+    label: FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT,
+  },
+]);
+
 export const DERIVED_FIELDS = Object.freeze([
   'netFee',
   'netGst',
@@ -46,6 +56,24 @@ function asId(value) {
   return number !== null && number > 0 ? number : null;
 }
 
+export function normalizeFeeScheduleMethod(value) {
+  return String(value ?? '').trim();
+}
+
+export function isCanonicalFeeScheduleMethod(value) {
+  return normalizeFeeScheduleMethod(value).toLowerCase()
+    === FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT.toLowerCase();
+}
+
+export function isMalformedDeductFromDisbursement(value) {
+  return normalizeFeeScheduleMethod(value).toLowerCase() === MALFORMED_DEDUCT_FROM_DISBURSEMENT.toLowerCase();
+}
+
+export function isLegacyFeeScheduleMethod(value) {
+  const method = normalizeFeeScheduleMethod(value);
+  return Boolean(method) && !isCanonicalFeeScheduleMethod(method);
+}
+
 export function normalizeFeeId(value) {
   const id = asId(value);
   return id === null ? '' : String(id);
@@ -76,6 +104,7 @@ export function createEmptyFeeRow({ rowKey = createRowKey(), feeId = '', feeName
     paidAmount: '',
     paidGst: '',
     feeScheduleMethod: '',
+    feeScheduleMethodLegacy: false,
     bpType: '',
     partnerCode: '',
     lineNo: null,
@@ -186,6 +215,8 @@ export function getManualRowsSignature(rows) {
 }
 
 export function mapFeeLineFromApi(record, index = 0) {
+  const feeScheduleMethod = asDisplayValue(readValue(record, 'feeScheduleMethod', 'FeeScheduleMethod'));
+
   return {
     rowKey: createRowKey('saved'),
     feeId: readValue(record, 'feeId', 'FeeId') ?? '',
@@ -197,7 +228,8 @@ export function mapFeeLineFromApi(record, index = 0) {
     feeWaiver: asDisplayValue(readValue(record, 'feeWaiver', 'FeeWaiver')),
     paidAmount: asDisplayValue(readValue(record, 'paidAmount', 'PaidAmount')),
     paidGst: asDisplayValue(readValue(record, 'paidGst', 'PaidGst')),
-    feeScheduleMethod: asDisplayValue(readValue(record, 'feeScheduleMethod', 'FeeScheduleMethod')),
+    feeScheduleMethod,
+    feeScheduleMethodLegacy: isLegacyFeeScheduleMethod(feeScheduleMethod),
     bpType: asDisplayValue(readValue(record, 'bpType', 'BPType')),
     partnerCode: asDisplayValue(readValue(record, 'partnerCode', 'PartnerCode')),
     lineNo: readValue(record, 'lineNo', 'LineNo') ?? index + 1,
@@ -264,6 +296,13 @@ export function validateFeeRows(rows, { validateAgainstPreview = false } = {}) {
       rowErrors.feeId = 'Select a Fee Master entry.';
     } else if (duplicateFeeIds.has(feeId)) {
       rowErrors.feeId = 'Duplicate fee types are not allowed. Please remove or change the duplicate fee.';
+    }
+
+    const feeScheduleMethod = normalizeFeeScheduleMethod(row?.feeScheduleMethod);
+    if (isMalformedDeductFromDisbursement(feeScheduleMethod)) {
+      rowErrors.feeScheduleMethod = `Invalid Fee Schedule Method. Select ${FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT} or choose an allowed legacy value.`;
+    } else if (feeScheduleMethod && row?.feeScheduleMethodLegacy !== true && !isCanonicalFeeScheduleMethod(feeScheduleMethod)) {
+      rowErrors.feeScheduleMethod = 'Unsupported Fee Schedule Method. Select a supported value.';
     }
     ERROR_FIELDS.forEach((field) => {
       const value = row?.[field];
