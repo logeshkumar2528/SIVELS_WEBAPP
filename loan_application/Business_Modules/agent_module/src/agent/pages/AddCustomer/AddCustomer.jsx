@@ -35,8 +35,8 @@ import { useLoading } from '../../../../../../Core/src/context/LoadingContext'
 import { useAgentIdentity } from '../../hooks/useAgentIdentity'
 import { extractApiErrorMessage, getApiErrorMessage } from '../../../../../../Core/src/utils/apiErrorHandler'
 import { emptyWorkflowStatus, extractWorkflowStatus } from '../../../../../../Core/src/utils/applicationWorkflowStatus'
+import { submitCustomerToRm } from '../../../../../../Core/src/utils/rmSubmission'
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../../Core/src/utils/amountHelper'
-import { WORKFLOW_STATUS_CODES } from '../../utils/workflowStatusDisplay'
 
 function AddCustomer() {
   const navigate = useNavigate()
@@ -777,30 +777,10 @@ function AddCustomer() {
     setGlobalError(null)
 
     try {
-      const transitionResponse = await agentCustomerService.updateCustomer(createdCustomerId, {
-        status: 1,
+      const confirmedStatus = await submitCustomerToRm({
+        customerService: agentCustomerService,
+        customerId: createdCustomerId,
       })
-
-      let confirmedRecord = transitionResponse
-      try {
-        confirmedRecord = await agentCustomerService.getCustomerById(createdCustomerId)
-      } catch (refreshError) {
-        console.warn('RM submission succeeded but the latest customer detail could not be refreshed', refreshError)
-      }
-
-      const refreshedStatus = extractWorkflowStatus(confirmedRecord)
-      const transitionStatus = extractWorkflowStatus(transitionResponse)
-      const confirmedStatus = refreshedStatus.workflowStatusCode !== null || refreshedStatus.legacyStatus !== null
-        ? refreshedStatus
-        : transitionStatus
-      const hasExplicitStatus = confirmedStatus.workflowStatusCode !== null || confirmedStatus.legacyStatus !== null
-      const isRmPending =
-        confirmedStatus.workflowStatusCode === WORKFLOW_STATUS_CODES.RM_VERIFICATION_PENDING ||
-        confirmedStatus.legacyStatus === 1
-
-      if (hasExplicitStatus && !isRmPending) {
-        throw new Error('The server did not confirm the RM Verification Pending status. Please retry.')
-      }
 
       setWorkflowStatus(confirmedStatus)
       setSubmissionConfirmed(true)

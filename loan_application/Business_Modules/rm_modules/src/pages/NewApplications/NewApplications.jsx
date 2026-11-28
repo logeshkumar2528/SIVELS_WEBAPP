@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../../../Core/src/api/apiConfig';
 import { getAccessToken } from '../../../../../Core/src/auth/tokenStore';
 import { handleSessionExpired } from '../../../../../Core/src/auth/authEvents';
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FileText, Eye, Pencil, Calendar } from 'lucide-react';
 import iconMap from '../../config/iconMap';
 import DataTable from '../../components/DataTable/DataTable';
@@ -43,6 +43,10 @@ import {
   isRmDownstreamStatus,
   matchesRmStatusFilter,
 } from '../../utils/rmWorkflowStatus';
+import {
+  cacheWorkflowRecord,
+  getRmVerificationAction,
+} from '../../utils/rmWorkflowEligibility';
 
 const API_BASE = API_BASE_URL;
 
@@ -451,6 +455,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
       ? ROUTES.NEW_APPLICATIONS
       : null;
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -485,6 +490,14 @@ export default function NewApplications({ initialFilter = 'All' }) {
     setFromDate('');
     setToDate('');
   }, [initialFilter]);
+
+  useEffect(() => {
+    const workflowGuardMessage = location.state?.workflowGuardMessage;
+    if (!workflowGuardMessage) return;
+
+    setErrorPopup(workflowGuardMessage);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   const loadApplications = useCallback(async () => {
     const rmContext = getCurrentRMContext();
@@ -1149,17 +1162,17 @@ export default function NewApplications({ initialFilter = 'All' }) {
 
   const handleVerifyNow = async (row) => {
     const applicationId = row.agentCustomerId || row.id;
-    const workflowCode = row.workflowStatus?.workflowStatusCode;
+    const verificationAction = getRmVerificationAction(row.workflowStatus || row);
     const applicationDetailsRoute = ROUTES.APPLICATION_DETAILS.replace(':applicationId', applicationId);
 
-    if (workflowCode === RM_WORKFLOW_CODES.RM_IN_PROGRESS) {
+    if (verificationAction.action === 'resume') {
       navigate(applicationDetailsRoute, applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined);
       return;
     }
 
-    if (workflowCode !== RM_WORKFLOW_CODES.RM_PENDING || verifyingId === String(applicationId)) {
-      if (workflowCode !== RM_WORKFLOW_CODES.RM_PENDING) {
-        navigate(applicationDetailsRoute, applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined);
+    if (verificationAction.action !== 'start' || verifyingId === String(applicationId)) {
+      if (verificationAction.action === 'blocked') {
+        setErrorPopup(verificationAction.message);
       }
       return;
     }
@@ -1183,10 +1196,11 @@ export default function NewApplications({ initialFilter = 'All' }) {
       const confirmedStatus = extractWorkflowStatus(latestRecord || transitionResponse);
       if (
         confirmedStatus.workflowStatusCode !== RM_WORKFLOW_CODES.RM_IN_PROGRESS ||
-        (confirmedStatus.legacyStatus !== null && Number(confirmedStatus.legacyStatus) !== 1)
+        Number(confirmedStatus.legacyStatus) !== 1
       ) {
         throw new Error('RM verification could not be confirmed by the server. Please refresh and try again.');
       }
+      cacheWorkflowRecord(applicationId, latestRecord);
       await loadApplications();
       navigate(applicationDetailsRoute, applicationListRoute ? { state: { returnTo: applicationListRoute } } : undefined);
     } catch (error) {
@@ -1359,6 +1373,22 @@ export default function NewApplications({ initialFilter = 'All' }) {
           );
         }
 
+        const verificationAction = getRmVerificationAction(row.workflowStatus || row);
+        if (verificationAction.action === 'blocked') {
+          return (
+            <div className="new-apps-actions-cell">
+              <Button
+                size="sm"
+                variant="secondary"
+                title={verificationAction.message}
+                onClick={() => setErrorPopup(verificationAction.message)}
+              >
+                {verificationAction.label}
+              </Button>
+            </div>
+          );
+        }
+
         return (
           <div className="new-apps-actions-cell">
             <Button
@@ -1367,7 +1397,7 @@ export default function NewApplications({ initialFilter = 'All' }) {
               onClick={() => handleVerifyNow(row)}
               disabled={verifyingId === String(applicationId)}
             >
-              {row.workflowStatusCode === RM_WORKFLOW_CODES.RM_IN_PROGRESS ? 'Resume Verification' : 'Verify Now'}
+              {verificationAction.label}
             </Button>
           </div>
         );

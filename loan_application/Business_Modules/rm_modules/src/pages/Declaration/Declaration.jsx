@@ -16,6 +16,7 @@ import { extractApiErrorMessage } from '../../../../../Core/src/utils/apiErrorHa
 import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { RM_WORKFLOW_CODES } from '../../utils/rmWorkflowStatus';
+import { getDeclarationSubmissionState } from '../../utils/rmWorkflowEligibility';
 import { buildApplicationDisplayId, buildSectionUpdate, getSectionState, getApplicantCount, createArray, resolveApplicantName } from '../applicationWizard/flowUtils';
 
 const API_BASE = API_BASE_URL;
@@ -429,23 +430,29 @@ export default function Declaration() {
         }
 
         const statusRes = await apiFetch(`${API_BASE}/AgentAddCustomer/${agentCustomerId}`);
-        if (statusRes.ok) {
+        if (!statusRes.ok) {
           const statusData = await statusRes.json().catch(() => null);
-          const customer = statusData?.value ?? statusData?.data ?? statusData;
-          const currentStatus = Number(customer?.status ?? customer?.Status);
-          // Backend only allows the status 1 → 2 transition; 2 means it was already logged to HO.
-          if (currentStatus === 2) {
-            saveApplication(appId, { status: 'Logged to HO' });
-            setOtpStep('success');
-            return;
-          }
-          if (Number.isFinite(currentStatus) && currentStatus !== 1) {
-            throw new Error(
-              currentStatus === 0
-                ? 'This application is still with the agent and cannot be logged to HO yet.'
-                : 'This application has already moved past RM review and cannot be submitted again.'
-            );
-          }
+          throw new Error(
+            statusData?.message ||
+            statusData?.title ||
+            `Unable to verify application workflow (${statusRes.status}). Please refresh and try again.`
+          );
+        }
+
+        const statusData = await statusRes.json().catch(() => null);
+        const customer = Array.isArray(statusData)
+          ? statusData[0]
+          : (Array.isArray(statusData?.value)
+            ? statusData.value[0]
+            : (Array.isArray(statusData?.data) ? statusData.data[0] : (statusData?.value ?? statusData?.data ?? statusData)));
+        const submissionState = getDeclarationSubmissionState(customer);
+        if (submissionState.alreadySubmitted) {
+          saveApplication(appId, { status: 'Logged to HO' });
+          setOtpStep('success');
+          return;
+        }
+        if (!submissionState.eligible) {
+          throw new Error(submissionState.reason);
         }
 
         const payload = {

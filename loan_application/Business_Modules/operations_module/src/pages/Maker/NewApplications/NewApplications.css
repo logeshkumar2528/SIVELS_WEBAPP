@@ -17,6 +17,9 @@
   background: var(--color-primary);
   font-size: 0.78rem;
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
   cursor: pointer;
 }
 
@@ -39,6 +42,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--spacing-4);
   padding: var(--spacing-4);
   border-bottom: 1px solid var(--color-border);
@@ -46,9 +50,11 @@
 
 .operations-new-applications-search {
   display: flex;
+  flex: 1 1 320px;
   align-items: center;
   gap: 8px;
   width: min(100%, 460px);
+  max-width: 100%;
   min-height: 36px;
   padding: 0 11px;
   color: var(--color-text-secondary);
@@ -69,9 +75,10 @@
 }
 
 .operations-new-applications-count {
+  flex: 0 1 auto;
   color: var(--color-text-secondary);
   font-size: 0.78rem;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .operations-new-applications-alert {
@@ -108,6 +115,8 @@
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
 }
 
 .operations-new-applications-table {
@@ -120,22 +129,22 @@
 
 .operations-new-applications-table th:nth-child(1),
 .operations-new-applications-table td:nth-child(1) {
-  width: 6%;
+  width: 5%;
 }
 
 .operations-new-applications-table th:nth-child(2),
 .operations-new-applications-table td:nth-child(2) {
-  width: 18%;
+  width: 16%;
 }
 
 .operations-new-applications-table th:nth-child(3),
 .operations-new-applications-table td:nth-child(3) {
-  width: 20%;
+  width: 19%;
 }
 
 .operations-new-applications-table th:nth-child(4),
 .operations-new-applications-table td:nth-child(4) {
-  width: 10%;
+  width: 18%;
 }
 
 .operations-new-applications-table th:nth-child(5),
@@ -144,12 +153,12 @@
 .operations-new-applications-table td:nth-child(6),
 .operations-new-applications-table th:nth-child(7),
 .operations-new-applications-table td:nth-child(7) {
-  width: 12%;
+  width: 10%;
 }
 
 .operations-new-applications-table th:nth-child(8),
 .operations-new-applications-table td:nth-child(8) {
-  width: 10%;
+  width: 12%;
 }
 
 .operations-new-applications-index {
@@ -165,7 +174,8 @@
   font-size: 0.72rem;
   font-weight: 700;
   text-align: left;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .operations-new-applications-table td {
@@ -173,9 +183,8 @@
   color: var(--color-text-primary);
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .operations-new-applications-table th:nth-child(1),
@@ -210,8 +219,9 @@
 }
 
 .operations-new-applications-customer span {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .operations-new-applications-avatar,
@@ -233,18 +243,26 @@
 
 .operations-new-applications-status {
   display: inline-flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   gap: 3px;
 }
 
 .operations-new-applications-status-chip {
+  min-width: 0;
+  max-width: 100%;
   padding: 4px 8px;
   color: var(--color-primary);
   background: var(--color-primary-light);
   border-radius: var(--radius-full);
   font-size: 0.7rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: center;
 }
 
 .operations-new-applications-status small {
@@ -267,6 +285,9 @@
   border-radius: var(--radius-sm);
   font-size: 0.72rem;
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -286,6 +307,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
   padding: var(--spacing-3) var(--spacing-4);
   color: var(--color-text-secondary);
@@ -327,5 +349,14 @@
 
   .operations-new-applications-search {
     width: 100%;
+  }
+
+  .operations-new-applications-count {
+    width: 100%;
+  }
+
+  .operations-new-applications-pagination {
+    justify-content: space-between;
+    gap: 8px;
   }
 }

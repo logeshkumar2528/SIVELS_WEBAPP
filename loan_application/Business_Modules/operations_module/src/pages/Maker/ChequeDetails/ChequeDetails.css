@@ -27,6 +27,7 @@
 .operations-cheque-section-heading {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   min-height: 42px;
   padding: 8px 14px;
   border-bottom: 1px solid #d1e4d7;
@@ -468,6 +469,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 13px 15px;
 }
@@ -481,6 +483,7 @@
   margin: 0;
   color: #165d3e;
   font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .operations-cheque-modal-header p {

@@ -327,6 +327,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 13px 15px;
 }
@@ -340,6 +341,7 @@
   margin: 0;
   color: #165d3e;
   font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .operations-mandate-modal-header p {

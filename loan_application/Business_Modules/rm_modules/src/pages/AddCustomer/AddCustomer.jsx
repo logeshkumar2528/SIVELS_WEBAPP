@@ -33,7 +33,8 @@ import {
 } from '../../../../../Core/src/services/customerDocumentService';
 import { formatIndianAmount, getRawAmount, parseAmountToNumber } from '../../../../../Core/src/utils/amountHelper';
 import { extractApiErrorMessage } from '../../../../../Core/src/utils/apiErrorHandler';
-import { extractWorkflowStatus } from '../../../../../Core/src/utils/applicationWorkflowStatus';
+import { submitCustomerToRm } from '../../../../../Core/src/utils/rmSubmission';
+import { clearWorkflowRecord } from '../../utils/rmWorkflowEligibility';
 import { getCurrentRMContext } from '../../utils/rmContext';
 import { ROUTES } from '../../config/routeConfig';
 import './AddCustomer.css';
@@ -835,30 +836,11 @@ export default function AddCustomer() {
     setGlobalBanner(null);
 
     try {
-      const transitionResponse = await rmCustomerService.updateCustomer(createdRmCustomerId, {
-        status: 1,
+      await submitCustomerToRm({
+        customerService: rmCustomerService,
+        customerId: createdRmCustomerId,
       });
-
-      let confirmedRecord = transitionResponse;
-      try {
-        confirmedRecord = await rmCustomerService.getCustomerById(createdRmCustomerId);
-      } catch (refreshError) {
-        console.warn('RM submission succeeded but the latest customer detail could not be refreshed', refreshError);
-      }
-
-      const refreshedStatus = extractWorkflowStatus(confirmedRecord);
-      const transitionStatus = extractWorkflowStatus(transitionResponse);
-      const confirmedStatus = refreshedStatus.workflowStatusCode !== null || refreshedStatus.legacyStatus !== null
-        ? refreshedStatus
-        : transitionStatus;
-      const hasExplicitStatus = confirmedStatus.workflowStatusCode !== null || confirmedStatus.legacyStatus !== null;
-      const isRmPending =
-        confirmedStatus.workflowStatusCode === 'RM_VERIFICATION_PENDING' ||
-        confirmedStatus.legacyStatus === 1;
-
-      if (hasExplicitStatus && !isRmPending) {
-        throw new Error('The server did not confirm the RM Verification Pending status. Please retry.');
-      }
+      clearWorkflowRecord(createdRmCustomerId);
 
       setGlobalBanner({
         type: 'success',

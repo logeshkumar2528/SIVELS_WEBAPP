@@ -60,6 +60,9 @@ export const agentCustomerService = {
 
   updateCustomer: async (id, customerData) => {
     const response = await axiosInstance.put(`/AgentAddCustomer/${id}`, customerData);
+    if (response?.status === 204) {
+      return { success: true, status: 204 };
+    }
     return response?.data ?? { success: true };
   },
 
