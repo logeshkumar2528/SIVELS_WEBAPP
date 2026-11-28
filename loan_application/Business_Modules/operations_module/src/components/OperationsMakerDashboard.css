@@ -1,0 +1,715 @@
+.operations-maker-dashboard {
+  --maker-dashboard-background: #F5F7F6;
+  --maker-dashboard-primary: #24563C;
+  --maker-dashboard-surface: #FFFFFF;
+  --maker-dashboard-border: #DCE4DF;
+  --maker-dashboard-text: #20382A;
+  --maker-dashboard-muted: #718078;
+  --maker-dashboard-shadow: 0 2px 10px rgba(32, 56, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  color: var(--maker-dashboard-text);
+}
+.operations-maker-dashboard button,
+.operations-maker-dashboard input,
+.operations-maker-dashboard select {
+  font: inherit;
+}
+
+.operations-maker-dashboard-welcome-top,
+.operations-maker-dashboard-card-heading,
+.operations-maker-dashboard-table-heading,
+.operations-maker-dashboard-table-toolbar,
+.operations-maker-dashboard-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.operations-maker-dashboard-card-heading h2,
+.operations-maker-dashboard-card-heading p,
+.operations-maker-dashboard-table-heading h2,
+.operations-maker-dashboard-table-heading p {
+  margin: 0;
+}
+
+.operations-maker-dashboard-overline {
+  color: var(--maker-dashboard-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.operations-maker-dashboard-card-heading p,
+.operations-maker-dashboard-table-heading p {
+  margin-top: 6px;
+  color: var(--maker-dashboard-muted);
+  font-size: 0.84rem;
+}
+
+.operations-maker-dashboard-action,
+.operations-maker-dashboard-state button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  color: #FFFFFF;
+  background: var(--maker-dashboard-primary);
+  border: 1px solid var(--maker-dashboard-primary);
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.operations-maker-dashboard-action:disabled,
+.operations-maker-dashboard-state button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.operations-maker-dashboard-action:hover:not(:disabled),
+.operations-maker-dashboard-state button:hover:not(:disabled) {
+  background: #1D4631;
+}
+
+.operations-maker-dashboard-welcome,
+.operations-maker-dashboard-kpi-card,
+.operations-maker-dashboard-chart-card,
+.operations-maker-dashboard-workspace,
+.operations-maker-dashboard-table-card {
+  min-width: 0;
+  background: var(--maker-dashboard-surface);
+  border: 1px solid var(--maker-dashboard-border);
+  border-radius: 8px;
+  box-shadow: var(--maker-dashboard-shadow);
+}
+
+.operations-maker-dashboard-welcome {
+  padding: 16px;
+}
+
+.operations-maker-dashboard-welcome-top {
+  align-items: flex-start;
+}
+
+.operations-maker-dashboard-welcome h2 {
+  margin: 4px 0 0;
+  color: var(--maker-dashboard-text);
+  font-size: 1.25rem;
+}
+
+.operations-maker-dashboard-employee {
+  margin: 7px 0 0;
+  color: var(--maker-dashboard-muted);
+  font-size: 0.82rem;
+}
+
+.operations-maker-dashboard-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  color: var(--maker-dashboard-primary);
+  background: #EAF2EC;
+  border: 1px solid #C9DCCF;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.operations-maker-dashboard-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.operations-maker-dashboard-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.operations-maker-dashboard-kpi-icon,
+.operations-maker-dashboard-workspace-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--maker-dashboard-primary);
+  background: #EAF2EC;
+  border-radius: 7px;
+}
+
+.operations-maker-dashboard-kpi-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.operations-maker-dashboard-kpi-card--new .operations-maker-dashboard-kpi-icon {
+  color: #2F6F9F;
+  background: #E6F0F8;
+}
+
+.operations-maker-dashboard-kpi-card--pending .operations-maker-dashboard-kpi-icon {
+  color: #9A6812;
+  background: #FFF3D8;
+}
+
+.operations-maker-dashboard-kpi-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.operations-maker-dashboard-kpi-copy span {
+  color: var(--maker-dashboard-muted);
+  font-size: 0.76rem;
+  line-height: 1.3;
+}
+
+.operations-maker-dashboard-kpi-copy strong {
+  color: var(--maker-dashboard-text);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.operations-maker-dashboard-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.operations-maker-dashboard-chart-card,
+.operations-maker-dashboard-workspace {
+  padding: 16px;
+}
+
+.operations-maker-dashboard-card-heading {
+  align-items: flex-start;
+}
+
+.operations-maker-dashboard-card-heading h2,
+.operations-maker-dashboard-table-heading h2 {
+  color: var(--maker-dashboard-text);
+  font-size: 1rem;
+}
+
+.operations-maker-dashboard-card-heading > svg {
+  flex: 0 0 auto;
+  color: var(--maker-dashboard-primary);
+}
+
+.operations-maker-dashboard-chart-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.operations-maker-dashboard-donut-wrap {
+  display: grid;
+  flex: 0 0 140px;
+  place-items: center;
+}
+
+.operations-maker-dashboard-donut {
+  width: 140px;
+  height: 140px;
+  overflow: visible;
+}
+
+.operations-maker-dashboard-donut-track,
+.operations-maker-dashboard-donut-segment {
+  fill: none;
+  stroke-width: 14;
+  transform: rotate(-90deg);
+  transform-origin: 70px 70px;
+}
+
+.operations-maker-dashboard-donut-track {
+  stroke: var(--maker-dashboard-border);
+}
+
+.operations-maker-dashboard-donut-segment {
+  stroke-linecap: butt;
+}
+
+.operations-maker-dashboard-donut-value {
+  fill: var(--maker-dashboard-text);
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.operations-maker-dashboard-donut-label {
+  fill: var(--maker-dashboard-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+
+.operations-maker-dashboard-legend {
+  display: flex;
+  flex: 0 1 260px;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  width: min(100%, 260px);
+}
+
+.operations-maker-dashboard-legend-item {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--maker-dashboard-muted);
+  font-size: 0.78rem;
+}
+
+.operations-maker-dashboard-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.operations-maker-dashboard-legend-label {
+  overflow-wrap: anywhere;
+}
+
+.operations-maker-dashboard-legend-item strong {
+  color: var(--maker-dashboard-text);
+}
+
+.operations-maker-dashboard-legend-percentage {
+  min-width: 42px;
+  color: var(--maker-dashboard-muted);
+  text-align: right;
+}
+
+.operations-maker-dashboard-workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.operations-maker-dashboard-workspace-card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  color: var(--maker-dashboard-text);
+  text-align: left;
+  background: #FBFCFB;
+  border: 1px solid var(--maker-dashboard-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.operations-maker-dashboard-workspace-card:hover {
+  border-color: #A8C9B2;
+  background: #F6FAF7;
+}
+
+.operations-maker-dashboard-workspace-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.operations-maker-dashboard-workspace-copy {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 3px;
+  min-width: 0;
+}
+
+.operations-maker-dashboard-workspace-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.operations-maker-dashboard-workspace-copy strong {
+  color: var(--maker-dashboard-primary);
+  font-size: 1.1rem;
+}
+
+.operations-maker-dashboard-workspace-card > svg {
+  flex: 0 0 auto;
+  color: var(--maker-dashboard-muted);
+}
+
+.operations-maker-dashboard-table-card {
+  overflow: hidden;
+}
+
+.operations-maker-dashboard-table-heading {
+  align-items: flex-start;
+  padding: 12px 16px 0;
+}
+
+.operations-maker-dashboard-text-button {
+  padding: 2px 0;
+  color: var(--maker-dashboard-primary);
+  background: transparent;
+  border: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.operations-maker-dashboard-text-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.operations-maker-dashboard-table-toolbar {
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--maker-dashboard-border);
+}
+
+.operations-maker-dashboard-search {
+  display: flex;
+  flex: 1 1 300px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--maker-dashboard-muted);
+  border: 1px solid var(--maker-dashboard-border);
+  border-radius: 7px;
+}
+
+.operations-maker-dashboard-search input {
+  width: 100%;
+  min-width: 0;
+  color: var(--maker-dashboard-text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: 0.8rem;
+}
+
+.operations-maker-dashboard-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--maker-dashboard-muted);
+  font-size: 0.78rem;
+}
+
+.operations-maker-dashboard-filter select {
+  min-height: 36px;
+  padding: 0 9px;
+  color: var(--maker-dashboard-text);
+  background: var(--maker-dashboard-surface);
+  border: 1px solid var(--maker-dashboard-border);
+  border-radius: 7px;
+}
+
+.operations-maker-dashboard-result-count {
+  color: var(--maker-dashboard-muted);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.operations-maker-dashboard-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.operations-maker-dashboard-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  font-size: 0.77rem;
+}
+
+.operations-maker-dashboard-table th,
+.operations-maker-dashboard-table td {
+  padding: 12px 11px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.operations-maker-dashboard-table th {
+  color: #FFFFFF;
+  background: var(--maker-dashboard-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: normal;
+}
+
+.operations-maker-dashboard-table td {
+  color: var(--maker-dashboard-text);
+  border-bottom: 1px solid var(--maker-dashboard-border);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.operations-maker-dashboard-table tbody tr:nth-child(even) {
+  background: #FBFCFB;
+}
+
+.operations-maker-dashboard-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.operations-maker-dashboard-table th:first-child,
+.operations-maker-dashboard-table td:first-child,
+.operations-maker-dashboard-table th:last-child,
+.operations-maker-dashboard-table td:last-child {
+  text-align: center;
+}
+
+.operations-maker-dashboard-customer {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.operations-maker-dashboard-customer strong {
+  font-size: 0.78rem;
+}
+
+.operations-maker-dashboard-customer span {
+  color: var(--maker-dashboard-muted);
+  font-size: 0.7rem;
+}
+
+.operations-maker-dashboard-status {
+  display: inline-block;
+  max-width: 220px;
+  padding: 5px 8px;
+  color: var(--maker-dashboard-primary);
+  background: #EAF2EC;
+  border: 1px solid #C9DCCF;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.operations-maker-dashboard-action {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.operations-maker-dashboard-empty {
+  padding: 42px 20px !important;
+  color: var(--maker-dashboard-muted) !important;
+  text-align: center !important;
+}
+
+.operations-maker-dashboard-pagination {
+  justify-content: center;
+  padding: 14px 20px 18px;
+  color: var(--maker-dashboard-muted);
+  font-size: 0.76rem;
+}
+
+.operations-maker-dashboard-pagination button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  color: var(--maker-dashboard-primary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.operations-maker-dashboard-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.operations-maker-dashboard-profile-alert,
+.operations-maker-dashboard-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--maker-dashboard-surface);
+  border: 1px solid var(--maker-dashboard-border);
+  border-radius: 8px;
+}
+
+.operations-maker-dashboard-profile-alert {
+  color: #8A5A12;
+  background: #FFFBF0;
+  border-color: #F0D9A6;
+  font-size: 0.8rem;
+}
+
+.operations-maker-dashboard-state {
+  color: var(--maker-dashboard-muted);
+}
+
+.operations-maker-dashboard-state--error {
+  color: #8B3A3A;
+  border-color: #E7C7C7;
+}
+
+.operations-maker-dashboard-state-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: var(--maker-dashboard-primary);
+  background: #EAF2EC;
+  border-radius: 7px;
+}
+
+.operations-maker-dashboard-state h2 {
+  margin: 0;
+  color: var(--maker-dashboard-text);
+  font-size: 0.95rem;
+}
+
+.operations-maker-dashboard-state p {
+  margin: 5px 0 12px;
+  font-size: 0.8rem;
+}
+
+.operations-maker-dashboard-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--maker-dashboard-muted);
+  font-size: 0.8rem;
+}
+
+.operations-maker-dashboard-loading-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.operations-maker-dashboard-skeleton {
+  min-height: 120px;
+  background: #EAF0EC;
+  border: 1px solid var(--maker-dashboard-border);
+  border-radius: 8px;
+}
+
+.operations-maker-dashboard-skeleton--wide {
+  min-height: 150px;
+}
+
+.operations-maker-dashboard-skeleton--table {
+  min-height: 260px;
+}
+
+.operations-maker-dashboard-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1024px) {
+  .operations-maker-dashboard-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-maker-dashboard-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .operations-maker-dashboard {
+    gap: 16px;
+  }
+
+  .operations-maker-dashboard-welcome,
+  .operations-maker-dashboard-chart-card,
+  .operations-maker-dashboard-workspace {
+    padding: 16px;
+  }
+
+  .operations-maker-dashboard-chart-content {
+    gap: 16px;
+  }
+
+  .operations-maker-dashboard-table-heading,
+  .operations-maker-dashboard-table-toolbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+@media (max-width: 540px) {
+  .operations-maker-dashboard-welcome-top,
+  .operations-maker-dashboard-table-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .operations-maker-dashboard-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .operations-maker-dashboard-chart-content {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .operations-maker-dashboard-donut-wrap {
+    align-self: center;
+  }
+
+  .operations-maker-dashboard-legend {
+    width: 100%;
+    max-width: none;
+  }
+
+  .operations-maker-dashboard-filter,
+  .operations-maker-dashboard-filter select,
+  .operations-maker-dashboard-search {
+    width: 100%;
+  }
+
+  .operations-maker-dashboard-filter {
+    justify-content: space-between;
+  }
+
+  .operations-maker-dashboard-result-count {
+    width: 100%;
+  }
+}

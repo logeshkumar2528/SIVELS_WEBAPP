@@ -1,3 +1,8 @@
+/* The Maker dashboard scrolls inside .layout-content, not at document level. */
+html:has(.operations-content--maker-dashboard) {
+  overflow-y: hidden;
+}
+
 .operations-content {
   display: flex;
   flex-direction: column;
@@ -6,6 +11,28 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+}
+
+/* Keep the Operations shell and desktop sidebar on the same viewport height. */
+.layout.operations-layout {
+  min-height: 100vh;
+  height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
+}
+
+.operations-layout .layout-body {
+  min-height: 0;
+}
+
+.operations-layout .sidebar {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* The Maker dashboard uses natural content height inside the shared scroll area. */
+.operations-content--maker-dashboard {
+  height: auto;
 }
 
 .operations-layout .header-user-name {

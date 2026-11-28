@@ -2,6 +2,7 @@ import { ShieldCheck } from 'lucide-react';
 import { getStoredRoleCode, getStoredUser } from '../../../../Core/src/auth/session';
 import useOperationsProfile from '../hooks/useOperationsProfile';
 import OperationsLayout from '../layouts/OperationsLayout';
+import OperationsMakerDashboard from './OperationsMakerDashboard';
 
 function getDisplayName(profile, storedUser) {
   return profile?.fullName || profile?.name || profile?.displayName
@@ -23,9 +24,20 @@ export default function OperationsDashboard({ roleCode }) {
   return (
     <OperationsLayout
       title={`${roleLabel} Dashboard`}
-      subtitle="Operations workspace"
+      subtitle={activeRole === 'MAKER' ? 'Your loan processing overview' : 'Operations workspace'}
       profile={profile}
     >
+      {activeRole === 'MAKER' && (
+        <OperationsMakerDashboard
+          profile={profile}
+          profileLoading={loading}
+          profileError={error}
+          displayName={getDisplayName(profile, storedUser)}
+        />
+      )}
+
+      {activeRole !== 'MAKER' && (
+        <>
       <section className="operations-page-heading" aria-labelledby="operations-dashboard-title">
         <div>
           <p className="operations-eyebrow">OPERATIONS</p>
@@ -62,6 +74,8 @@ export default function OperationsDashboard({ roleCode }) {
           </p>
         </div>
       </section>
+        </>
+      )}
     </OperationsLayout>
   );
 }
