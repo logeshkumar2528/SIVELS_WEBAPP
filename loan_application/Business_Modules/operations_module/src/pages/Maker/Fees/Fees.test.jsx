@@ -49,6 +49,7 @@ vi.mock('../../../services/operationsFeesService', () => ({
 }));
 
 import Fees from './Fees';
+import { FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT } from './feesPayload';
 
 describe('Fees screen', () => {
   beforeEach(() => {
@@ -123,6 +124,58 @@ describe('Fees screen', () => {
     expect(screen.getByLabelText('Fee Name for line 1')).toHaveValue('1');
   });
 
+  it('keeps fee schedule method selections independent across added and removed rows', async () => {
+    getFees.mockResolvedValue([
+      { feeId: 1, feeName: 'Application Fee', isActive: true },
+      { feeId: 2, feeName: 'Cersai Fee', isActive: true },
+    ]);
+    getByCustomer.mockResolvedValue({
+      header: { operationsFeeHeaderId: 55 },
+      lines: [{ feeId: 1, feeName: 'Application Fee', feeScheduleMethod: 'Manual' }],
+    });
+
+    render(<Fees />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+    fireEvent.change(screen.getByLabelText('Fee Schedule Method for Application Fee'), {
+      target: { value: FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Add Fee Line/i }));
+
+    const secondFee = await screen.findByLabelText('Fee Name for line 2');
+    fireEvent.change(secondFee, { target: { value: '2' } });
+    const secondMethod = await screen.findByLabelText('Fee Schedule Method for Cersai Fee');
+    fireEvent.change(secondMethod, { target: { value: '' } });
+
+    expect(screen.getByLabelText('Fee Schedule Method for Application Fee')).toHaveValue(
+      FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Remove fee line 2/i }));
+    expect(screen.getByLabelText('Fee Schedule Method for Application Fee')).toHaveValue(
+      FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT,
+    );
+  });
+
+  it('shows and blocks a malformed saved method until explicitly corrected', async () => {
+    getByCustomer.mockResolvedValue({
+      header: { operationsFeeHeaderId: 55 },
+      lines: [{ feeId: 1, feeName: 'Cersai Fee', feeScheduleMethod: 'Deduct from Disbursemen' }],
+    });
+
+    render(<Fees />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Invalid Fee Schedule Method');
+    expect(screen.getByRole('button', { name: /Save & Continue/i })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Fee Schedule Method for Cersai Fee'), {
+      target: { value: FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT },
+    });
+    await waitFor(() => expect(screen.queryByText(/Invalid Fee Schedule Method/i)).not.toBeInTheDocument());
+  });
+
   it('navigates Back to Loan Basic Details with the selected application context', async () => {
     render(<Fees />);
 
@@ -132,7 +185,7 @@ describe('Fees screen', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/operations/maker/loan-basic-details?applicationId=98');
   });
 
-  it('saves and verifies persistence before navigating to Covenants', async () => {
+  it('saves and verifies persistence before navigating to Repayment Schedule', async () => {
     const saved = {
       header: { operationsFeeHeaderId: 44, notes: 'Saved notes' },
       lines: [{ feeId: 1, feeName: 'Processing Fee', gstTreatment: 'Exclusive', gstPercent: 0.18 }],
@@ -150,6 +203,6 @@ describe('Fees screen', () => {
 
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(getByCustomer).toHaveBeenCalledWith(98, 123);
-    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/operations/maker/covenants?applicationId=98'));
+    await waitFor(() => expect(mocks.navigate).toHaveBeenCalledWith('/operations/maker/repayment-schedule?applicationId=98'));
   });
 });

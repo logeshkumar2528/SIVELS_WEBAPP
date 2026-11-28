@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildFeesPayload,
+  FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT,
   getManualRowsSignature,
+  isMalformedDeductFromDisbursement,
   mapFeesResponse,
   mergeFeeMasterOptions,
   normalizeFeeId,
@@ -53,6 +55,23 @@ describe('feesPayload', () => {
         lineNo: 1,
       }],
     });
+  });
+
+  it('serializes independent fee schedule method values and keeps empty methods optional', () => {
+    const payload = buildFeesPayload({
+      agentCustomerId: 101,
+      applicationProductDetailsId: 107,
+      createdBy: 7,
+      rows: [
+        { feeId: 1, feeName: 'Fee A', feeScheduleMethod: FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT },
+        { feeId: 2, feeName: 'Fee B', feeScheduleMethod: '' },
+      ],
+    });
+
+    expect(payload.lines.map((line) => line.feeScheduleMethod)).toEqual([
+      FEE_SCHEDULE_METHOD_DEDUCT_FROM_DISBURSEMENT,
+      null,
+    ]);
   });
 
   it('maps backend calculated fields without including them in outgoing payloads', () => {
@@ -140,6 +159,33 @@ describe('feesPayload', () => {
       paidAmount: 'Paid Amount cannot exceed Net Fee.',
       paidGst: 'Paid GST cannot exceed Net GST.',
     });
+  });
+
+  it('preserves saved legacy methods and identifies the confirmed truncated value', () => {
+    const response = mapFeesResponse({
+      lines: [
+        { feeId: 1, feeName: 'Legacy Fee', feeScheduleMethod: 'Manual' },
+        { feeId: 2, feeName: 'Legacy Deduction', feeScheduleMethod: 'Deduct from Disbursemen' },
+      ],
+    });
+
+    expect(response.lines[0].feeScheduleMethod).toBe('Manual');
+    expect(response.lines[0].feeScheduleMethodLegacy).toBe(true);
+    expect(isMalformedDeductFromDisbursement(response.lines[1].feeScheduleMethod)).toBe(true);
+
+    const errors = validateFeeRows(response.lines);
+    expect(errors[0]?.feeScheduleMethod).toBeUndefined();
+    expect(errors[1].feeScheduleMethod).toContain('Invalid Fee Schedule Method');
+  });
+
+  it('rejects newly introduced unsupported methods before payload submission', () => {
+    const errors = validateFeeRows([{
+      feeId: 1,
+      feeName: 'Fee',
+      feeScheduleMethod: 'Unsupported Method',
+    }]);
+
+    expect(errors[0].feeScheduleMethod).toContain('Unsupported Fee Schedule Method');
   });
 
   it('normalizes duplicate Fee Master IDs and blocks duplicate rows', () => {

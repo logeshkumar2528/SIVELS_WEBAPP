@@ -14,8 +14,10 @@ import {
   createFeeRowFromMaster,
   DERIVED_FIELDS,
   buildFeesPayload,
+  FEE_SCHEDULE_METHOD_OPTIONS,
   getManualRowsSignature,
   GST_TREATMENTS,
+  isLegacyFeeScheduleMethod,
   mapFeesResponse,
   mergeFeeMasterOptions,
   mergePreviewDerivedValues,
@@ -55,6 +57,19 @@ const TEXT_COLUMNS = [
   { key: 'bpType', label: 'BP Type', className: 'operations-fees-col--text' },
   { key: 'partnerCode', label: 'Partner Code', className: 'operations-fees-col--text' },
 ];
+
+function getFeeScheduleMethodOptions(value) {
+  const currentValue = String(value ?? '');
+  if (!currentValue || FEE_SCHEDULE_METHOD_OPTIONS.some((option) => option.value === currentValue)) {
+    return FEE_SCHEDULE_METHOD_OPTIONS;
+  }
+
+  return [
+    FEE_SCHEDULE_METHOD_OPTIONS[0],
+    { value: currentValue, label: `Saved legacy value: ${JSON.stringify(currentValue)}` },
+    ...FEE_SCHEDULE_METHOD_OPTIONS.slice(1),
+  ];
+}
 
 const EMPTY_HEADER = HEADER_TOTAL_FIELDS.reduce((values, field) => ({ ...values, [field]: null }), {});
 
@@ -174,15 +189,44 @@ function FeeRow({ row, index, feeOptions, selectedFeeIds, errors, onChange, onRe
       ))}
       {TEXT_COLUMNS.map((column) => (
         <td className={['operations-fees-cell', column.className].join(' ').trim()} key={column.key}>
-          <input
-            className={`operations-fees-input operations-fees-input--text ${rowErrors[column.key] ? 'is-invalid' : ''}`}
-            type="text"
-            list={column.key === 'feeScheduleMethod' ? 'fee-schedule-method-suggestions' : undefined}
-            aria-label={`${column.label} for ${feeName}`}
-            value={row[column.key] ?? ''}
-            disabled={disabled}
-            onChange={(event) => onChange(row.rowKey, column.key, event.target.value)}
-          />
+          {column.key === 'feeScheduleMethod' ? (
+            <>
+              <select
+                className={`operations-fees-select ${rowErrors[column.key] ? 'is-invalid' : ''}`}
+                aria-label={`${column.label} for ${feeName}`}
+                aria-invalid={Boolean(rowErrors[column.key])}
+                value={row[column.key] ?? ''}
+                disabled={disabled}
+                onChange={(event) => onChange(
+                  row.rowKey,
+                  column.key,
+                  event.target.value,
+                  undefined,
+                  { feeScheduleMethodLegacy: isLegacyFeeScheduleMethod(event.target.value) },
+                )}
+              >
+                {getFeeScheduleMethodOptions(row[column.key]).map((option) => (
+                  <option key={`${option.value}-${option.label}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {rowErrors[column.key] && (
+                <small className="operations-fees-state--error" role="alert">
+                  {rowErrors[column.key]}
+                </small>
+              )}
+            </>
+          ) : (
+            <input
+              className={`operations-fees-input operations-fees-input--text ${rowErrors[column.key] ? 'is-invalid' : ''}`}
+              type="text"
+              aria-label={`${column.label} for ${feeName}`}
+              value={row[column.key] ?? ''}
+              disabled={disabled}
+              onChange={(event) => onChange(row.rowKey, column.key, event.target.value)}
+            />
+          )}
         </td>
       ))}
       <td className="operations-fees-cell operations-fees-cell--action">
@@ -417,10 +461,15 @@ export default function Fees() {
     };
   }, [agentCustomerId, loadState.status, manualRowsKey, notes, operationsUserId, previewRetryKey, resolvedApplicationProductDetailsId]);
 
-  const updateRow = (rowKey, field, value, relatedFeeName) => {
+  const updateRow = (rowKey, field, value, relatedFeeName, metadata = {}) => {
     setRows((currentRows) => currentRows.map((row) => (
       row.rowKey === rowKey
-        ? clearDerivedValues({ ...row, [field]: value, ...(field === 'feeId' ? { feeName: relatedFeeName || '' } : {}) })
+        ? clearDerivedValues({
+          ...row,
+          [field]: value,
+          ...(field === 'feeId' ? { feeName: relatedFeeName || '' } : {}),
+          ...(field === 'feeScheduleMethod' ? { feeScheduleMethodLegacy: metadata.feeScheduleMethodLegacy === true } : {}),
+        })
         : row
     )));
   };
@@ -601,7 +650,6 @@ export default function Fees() {
               </tbody>
             </table>
           </div>
-          <datalist id="fee-schedule-method-suggestions"><option value="Deduct from Disbursement" /></datalist>
         </section>
 
         {(previewState.status === 'pending' || previewState.status === 'invalid' || previewState.status === 'error') && (
