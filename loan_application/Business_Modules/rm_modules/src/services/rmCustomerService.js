@@ -61,6 +61,9 @@ export const rmCustomerService = {
 
   updateCustomer: async (id, customerData) => {
     const response = await axiosInstance.put(`/AgentAddCustomer/${encodeURIComponent(id)}`, customerData);
+    if (response?.status === 204) {
+      return { success: true, status: 204 };
+    }
     return normalizeCustomerResponse(response?.data ?? { success: true });
   },
 

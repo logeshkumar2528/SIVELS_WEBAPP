@@ -21,6 +21,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 14px 18px;
   background: #eaf2eb;
@@ -588,7 +589,14 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 10px;
+}
+
+.operations-fees-state,
+.operations-fees-preview-status {
+  flex-wrap: wrap;
 }
 
 .operations-fees-helper {
@@ -613,4 +621,15 @@
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
+}
+
+@media (max-width: 680px) {
+  .operations-fees-section-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .operations-fees-section-actions .operations-fees-button {
+    width: 100%;
+  }
 }

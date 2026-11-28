@@ -28,6 +28,7 @@ import PdfView from '../pages/PdfView/PdfView';
 import FieldVerification from '../pages/FieldVerification/FieldVerification';
 import FieldVerificationStep2 from '../pages/FieldVerification/FieldVerificationStep2';
 import { ApplicationDraftProvider } from '../state/ApplicationDraftContext';
+import RmWorkflowGuard from '../components/RmWorkflowGuard/RmWorkflowGuard';
 
 function LayoutWrapper({ children, title, subtitle }) {
   const navigate = useNavigate();
@@ -55,6 +56,10 @@ function LogoutRoute() {
     logout();
   }, []);
   return null;
+}
+
+function RmWizardRoute({ children }) {
+  return <RmWorkflowGuard>{children}</RmWorkflowGuard>;
 }
 
 export default function AppRoutes() {
@@ -184,7 +189,7 @@ export default function AppRoutes() {
           path={ROUTES.APPLICATION_DETAILS}
           element={
             <LayoutWrapper title="Application & Product Details" subtitle="Step 1 of 11">
-              <ApplicationDetails />
+              <RmWizardRoute><ApplicationDetails /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -193,7 +198,7 @@ export default function AppRoutes() {
           path={ROUTES.PERSONAL_INFORMATION}
           element={
             <LayoutWrapper title="Personal Information" subtitle="Step 3 of 11">
-              <CustomerRegistration />
+              <RmWizardRoute><CustomerRegistration /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -202,7 +207,7 @@ export default function AppRoutes() {
           path={ROUTES.ADDRESS_DETAILS}
           element={
             <LayoutWrapper title="Address Details" subtitle="Step 4 of 11">
-              <AddressDetails />
+              <RmWizardRoute><AddressDetails /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -211,7 +216,7 @@ export default function AppRoutes() {
           path={ROUTES.KYC_DOCUMENTS}
           element={
             <LayoutWrapper title="KYC Documents" subtitle="Step 2 of 11">
-              <KycDocuments />
+              <RmWizardRoute><KycDocuments /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -220,7 +225,7 @@ export default function AppRoutes() {
           path={ROUTES.EMPLOYMENT_INCOME}
           element={
             <LayoutWrapper title="Employment & Income Details" subtitle="Step 5 of 11">
-              <EmploymentIncome />
+              <RmWizardRoute><EmploymentIncome /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -229,7 +234,7 @@ export default function AppRoutes() {
           path={ROUTES.BANK_EXISTING_LOANS}
           element={
             <LayoutWrapper title="Bank / Existing Loan Details" subtitle="Step 6 of 11">
-              <BankExistingLoans />
+              <RmWizardRoute><BankExistingLoans /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -238,7 +243,7 @@ export default function AppRoutes() {
           path={ROUTES.REFERENCES}
           element={
             <LayoutWrapper title="Reference Details" subtitle="Step 7 of 11">
-              <ReferenceDetails />
+              <RmWizardRoute><ReferenceDetails /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -247,7 +252,7 @@ export default function AppRoutes() {
           path={ROUTES.COLLATERAL}
           element={
             <LayoutWrapper title="Collateral Details" subtitle="Step 8 of 11">
-              <CollateralDetails />
+              <RmWizardRoute><CollateralDetails /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -256,7 +261,7 @@ export default function AppRoutes() {
           path={ROUTES.SCHEDULE_CHARGES}
           element={
             <LayoutWrapper title="Schedule of Charges" subtitle="Step 9 of 11">
-              <ScheduleOfCharges />
+              <RmWizardRoute><ScheduleOfCharges /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -265,7 +270,7 @@ export default function AppRoutes() {
           path={ROUTES.DOCUMENT_CHECKLIST}
           element={
             <LayoutWrapper title="Document Checklist" subtitle="Step 10 of 11">
-              <DocumentChecklist />
+              <RmWizardRoute><DocumentChecklist /></RmWizardRoute>
             </LayoutWrapper>
           }
         />
@@ -274,7 +279,7 @@ export default function AppRoutes() {
           path={ROUTES.DECLARATION}
           element={
             <LayoutWrapper title="Declaration" subtitle="Step 11 of 11">
-              <Declaration />
+              <RmWizardRoute><Declaration /></RmWizardRoute>
             </LayoutWrapper>
           }
         />

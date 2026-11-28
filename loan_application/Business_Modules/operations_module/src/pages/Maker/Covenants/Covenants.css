@@ -72,6 +72,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   min-height: 52px;
   box-sizing: border-box;
@@ -553,6 +554,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 16px 18px;
   background: #eaf2eb;
@@ -561,6 +563,7 @@
 
 .operations-covenants-modal-header h2,
 .operations-covenants-confirmation-header h2 {
+  overflow-wrap: anywhere;
   margin: 0;
   color: #174a2f;
   font-size: 16px;

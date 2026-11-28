@@ -1,6 +1,7 @@
 .operations-loan-page {
   width: 100%;
   max-width: 1360px;
+  min-width: 0;
   margin: 0 auto;
   padding: 4px 0 24px;
   box-sizing: border-box;
@@ -21,6 +22,7 @@
 }
 
 .operations-loan-section-heading {
+  overflow-wrap: anywhere;
   padding: 14px 18px;
   background: #eaf2eb;
   border-bottom: 1px solid #d5e3d8;
@@ -270,5 +272,16 @@
   .operations-loan-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .operations-loan-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .operations-loan-actions {
+    width: 100%;
   }
 }
