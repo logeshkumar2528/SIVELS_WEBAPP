@@ -149,7 +149,15 @@ export default function OperationsLayout({ title, subtitle, children, profile = 
           onUserMenuClick={() => navigate('/operations/profile')}
         />
 
-        <main className="layout-content operations-content" id="main-content" aria-label="Operations page content">
+        <main
+          className={[
+            'layout-content',
+            'operations-content',
+            pathname === ROUTES.MAKER_DASHBOARD ? 'operations-content--maker-dashboard' : '',
+          ].join(' ').trim()}
+          id="main-content"
+          aria-label="Operations page content"
+        >
           {children}
         </main>
       </div>
